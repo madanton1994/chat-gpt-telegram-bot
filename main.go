@@ -234,7 +234,7 @@ func EscapeMarkdownV2(text string) string {
 
 	for _, char := range text {
 		if strings.ContainsRune(specialChars, char) {
-			escapedText.WriteRune('\\')
+			escapedText.WriteString(`\\`)
 		}
 		escapedText.WriteRune(char)
 	}
