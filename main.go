@@ -138,7 +138,6 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		default:
 			response := getChatGPTResponse(update.Message.Chat.ID, text)
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
-			msg.ParseMode = "HTML"
 			bot.Send(msg)
 		}
 	}
@@ -152,7 +151,6 @@ func handleStartCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		"/status - Show current status\n" +
 		"/settings - Show settings"
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
-	msg.ParseMode = "HTML"
 	bot.Send(msg)
 }
 
@@ -164,7 +162,6 @@ func handleHelpCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		"/status - Show current status\n" +
 		"/settings - Show settings"
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
-	msg.ParseMode = "HTML"
 	bot.Send(msg)
 }
 
@@ -181,7 +178,6 @@ func handleStatusCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	}
 	message := "Bot is running.\nCurrent model: " + model
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
-	msg.ParseMode = "HTML"
 	bot.Send(msg)
 }
 
@@ -200,7 +196,6 @@ func handleSettingsCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		"Current model: " + model + "\n" +
 		"Use /model <model-name> to change the model."
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
-	msg.ParseMode = "HTML"
 	bot.Send(msg)
 }
 
@@ -292,11 +287,4 @@ func getChatGPTResponse(chatID int64, message string) string {
 	}
 
 	return "I couldn't process your request."
-}
-
-func formatCode(text string) string {
-	if strings.Contains(text, "```") {
-		text = strings.ReplaceAll(text, "```", "```")
-	}
-	return text
 }
