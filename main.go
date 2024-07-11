@@ -269,7 +269,7 @@ func getChatGPTResponse(chatID int64, message string) string {
 	}
 
 	if len(responseBody.Choices) > 0 {
-		return responseBody.Choices[0].Message.Content
+		return formatAsTelegramCode(responseBody.Choices[0].Message.Content)
 	}
 
 	return "I couldn't process your request."
@@ -296,4 +296,8 @@ func mainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
 			tgbotapi.NewKeyboardButton("💬 Chats"),
 		),
 	)
+}
+
+func formatAsTelegramCode(content string) string {
+	return "<pre>" + content + "</pre>"
 }
