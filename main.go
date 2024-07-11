@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -299,5 +300,9 @@ func mainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
 }
 
 func formatAsTelegramCode(content string) string {
-	return "<pre>" + content + "</pre>"
+	re := regexp.MustCompile("(?s)```(.*?)```")
+	return re.ReplaceAllStringFunc(content, func(m string) string {
+		code := re.FindStringSubmatch(m)[1]
+		return "<pre>" + code + "</pre>"
+	})
 }
