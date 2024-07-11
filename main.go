@@ -148,23 +148,23 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 }
 
 func sendWelcomeMessage(bot *tgbotapi.BotAPI, chatID int64) {
-	msg := tgbotapi.NewMessage(chatID, "Welcome! I am your ChatGPT bot. You can use the following commands:")
+	msg := tgbotapi.NewMessage(chatID, "👋 Welcome! I am your ChatGPT bot. You can use the following commands:")
 	msg.ReplyMarkup = mainMenuKeyboard()
 	bot.Send(msg)
 }
 
 func sendHelpMessage(bot *tgbotapi.BotAPI, chatID int64) {
-	msg := tgbotapi.NewMessage(chatID, "Here is a list of commands you can use:")
+	msg := tgbotapi.NewMessage(chatID, "ℹ️ Here is a list of commands you can use:")
 	bot.Send(msg)
 }
 
 func sendStatusMessage(bot *tgbotapi.BotAPI, chatID int64) {
-	msg := tgbotapi.NewMessage(chatID, "All systems are operational.")
+	msg := tgbotapi.NewMessage(chatID, "📊 All systems are operational.")
 	bot.Send(msg)
 }
 
 func sendSettingsMessage(bot *tgbotapi.BotAPI, chatID int64) {
-	msg := tgbotapi.NewMessage(chatID, "Settings options will be available soon.")
+	msg := tgbotapi.NewMessage(chatID, "⚙️ Settings options will be available soon.")
 	bot.Send(msg)
 }
 
@@ -174,7 +174,7 @@ func sendChatList(bot *tgbotapi.BotAPI, chatID int64) {
 	rows, err := db.Query("SELECT DISTINCT chat_id FROM chat_history")
 	if err != nil {
 		log.Printf("Error fetching chat list: %v", err)
-		msg := tgbotapi.NewMessage(chatID, "Error fetching chat list.")
+		msg := tgbotapi.NewMessage(chatID, "❌ Error fetching chat list.")
 		bot.Send(msg)
 		return
 	}
@@ -191,13 +191,13 @@ func sendChatList(bot *tgbotapi.BotAPI, chatID int64) {
 	}
 
 	if len(chatIDs) == 0 {
-		msg := tgbotapi.NewMessage(chatID, "No chats found.")
+		msg := tgbotapi.NewMessage(chatID, "📭 No chats found.")
 		bot.Send(msg)
 		return
 	}
 
 	var chatList strings.Builder
-	chatList.WriteString("Active chats:\n")
+	chatList.WriteString("💬 Active chats:\n")
 	for _, id := range chatIDs {
 		chatList.WriteString("- Chat ID: ")
 		chatList.WriteString(strconv.FormatInt(id, 10))
@@ -261,19 +261,19 @@ func getChatGPTResponse(chatID int64, message string) string {
 	log.Printf("OpenAI API response body: %s", resp.String())
 
 	if resp.StatusCode() == 429 {
-		return "You exceeded your current quota. Please check your plan and billing details."
+		return "❌ You exceeded your current quota. Please check your plan and billing details."
 	}
 
 	if responseBody.Error.Message != "" {
 		log.Printf("OpenAI API error: %s", responseBody.Error.Message)
-		return "An error occurred while processing your request."
+		return "❌ An error occurred while processing your request."
 	}
 
 	if len(responseBody.Choices) > 0 {
 		return formatAsTelegramCode(responseBody.Choices[0].Message.Content)
 	}
 
-	return "I couldn't process your request."
+	return "❌ I couldn't process your request."
 }
 
 func saveChatHistory(chatID int64, message string) {
