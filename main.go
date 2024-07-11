@@ -217,4 +217,34 @@ func getChatGPTResponse(chatID int64, message string) string {
 
 	if responseBody.Error.Message != "" {
 		log.Printf("OpenAI API error: %s", responseBody.Error.Message)
-		return "An error occurred:"
+		return "An error occurred: " + responseBody.Error.Message
+	}
+
+	if len(responseBody.Choices) > 0 {
+		return EscapeMarkdownV2(responseBody.Choices[0].Message.Content)
+	}
+
+	return "I couldn't process your request."
+}
+
+// EscapeMarkdownV2 экранирует специальные символы для использования в MarkdownV2
+func EscapeMarkdownV2(text string) string {
+	specialChars := "_*[]()~`>#+-=|{}.!"
+	escapedText := strings.Builder{}
+
+	for _, char := range text {
+		if strings.ContainsRune(specialChars, char) {
+			escapedText.WriteRune('\\')
+		}
+		escapedText.WriteRune(char)
+	}
+
+	return escapedText.String()
+}
+
+func formatCode(text string) string {
+	if strings.Contains(text, "```") {
+		text = strings.ReplaceAll(text, "```", "```")
+	}
+	return text
+}
