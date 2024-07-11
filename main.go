@@ -127,96 +127,84 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 
 		switch text {
 		case "🚀 Start":
-			handleStart(bot, update)
+			sendWelcomeMessage(bot, update.Message.Chat.ID)
 		case "ℹ️ Help":
-			handleHelp(bot, update)
+			sendHelpMessage(bot, update.Message.Chat.ID)
 		case "📊 Status":
-			handleStatus(bot, update)
+			sendStatusMessage(bot, update.Message.Chat.ID)
 		case "⚙️ Settings":
-			handleSettings(bot, update)
+			sendSettingsMessage(bot, update.Message.Chat.ID)
 		case "💬 Chats":
-			handleChats(bot, update)
+			sendChatList(bot, update.Message.Chat.ID)
 		default:
-			handleMessage(bot, update)
+			response := getChatGPTResponse(update.Message.Chat.ID, text)
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
+			msg.ParseMode = "HTML"
+			bot.Send(msg)
+			saveChatHistory(update.Message.Chat.ID, text)
 		}
 	}
 }
 
-func handleStart(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Welcome! I am your ChatGPT bot. You can use the following commands:")
-	msg.ReplyMarkup = getMainKeyboard()
+func sendWelcomeMessage(bot *tgbotapi.BotAPI, chatID int64) {
+	msg := tgbotapi.NewMessage(chatID, "Welcome! I am your ChatGPT bot. You can use the following commands:")
+	msg.ReplyMarkup = mainMenuKeyboard()
 	bot.Send(msg)
 }
 
-func handleHelp(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Use the buttons to interact with the bot.")
+func sendHelpMessage(bot *tgbotapi.BotAPI, chatID int64) {
+	msg := tgbotapi.NewMessage(chatID, "Here is a list of commands you can use:")
 	bot.Send(msg)
 }
 
-func handleStatus(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Bot is running normally.")
+func sendStatusMessage(bot *tgbotapi.BotAPI, chatID int64) {
+	msg := tgbotapi.NewMessage(chatID, "All systems are operational.")
 	bot.Send(msg)
 }
 
-func handleSettings(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "There are no configurable settings at the moment.")
+func sendSettingsMessage(bot *tgbotapi.BotAPI, chatID int64) {
+	msg := tgbotapi.NewMessage(chatID, "Settings options will be available soon.")
 	bot.Send(msg)
 }
 
-func handleChats(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+func sendChatList(bot *tgbotapi.BotAPI, chatID int64) {
 	log.Println("Fetching chat list...")
 
 	rows, err := db.Query("SELECT DISTINCT chat_id FROM chat_history")
 	if err != nil {
 		log.Printf("Error fetching chat list: %v", err)
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Error fetching chat list.")
+		msg := tgbotapi.NewMessage(chatID, "Error fetching chat list.")
 		bot.Send(msg)
 		return
 	}
 	defer rows.Close()
 
-	var chatIDs []string
+	var chatIDs []int64
 	for rows.Next() {
 		var chatID int64
 		if err := rows.Scan(&chatID); err != nil {
-			log.Printf("Error scanning chat_id: %v", err)
+			log.Printf("Error scanning chat ID: %v", err)
 			continue
 		}
-		chatIDs = append(chatIDs, strconv.FormatInt(chatID, 10))
+		chatIDs = append(chatIDs, chatID)
 	}
 
 	if len(chatIDs) == 0 {
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "No chats found.")
+		msg := tgbotapi.NewMessage(chatID, "No chats found.")
 		bot.Send(msg)
-	} else {
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Active chats: "+strings.Join(chatIDs, ", "))
-		bot.Send(msg)
+		return
 	}
-}
 
-func handleMessage(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	response := getChatGPTResponse(update.Message.Chat.ID, update.Message.Text)
+	var chatList strings.Builder
+	chatList.WriteString("Active chats:\n")
+	for _, id := range chatIDs {
+		chatList.WriteString("- Chat ID: ")
+		chatList.WriteString(strconv.FormatInt(id, 10))
+		chatList.WriteString("\n")
+	}
 
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
-	msg.ParseMode = "HTML"
-
+	msg := tgbotapi.NewMessage(chatID, chatList.String())
 	bot.Send(msg)
-}
-
-func getMainKeyboard() tgbotapi.ReplyKeyboardMarkup {
-	return tgbotapi.NewReplyKeyboard(
-		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("🚀 Start"),
-			tgbotapi.NewKeyboardButton("ℹ️ Help"),
-		),
-		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("📊 Status"),
-			tgbotapi.NewKeyboardButton("⚙️ Settings"),
-		),
-		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("💬 Chats"),
-		),
-	)
 }
 
 func getChatGPTResponse(chatID int64, message string) string {
@@ -277,7 +265,7 @@ func getChatGPTResponse(chatID int64, message string) string {
 
 	if responseBody.Error.Message != "" {
 		log.Printf("OpenAI API error: %s", responseBody.Error.Message)
-		return "An error occurred: " + responseBody.Error.Message
+		return "An error occurred while processing your request."
 	}
 
 	if len(responseBody.Choices) > 0 {
@@ -285,4 +273,27 @@ func getChatGPTResponse(chatID int64, message string) string {
 	}
 
 	return "I couldn't process your request."
+}
+
+func saveChatHistory(chatID int64, message string) {
+	_, err := db.Exec("INSERT INTO chat_history (chat_id, message) VALUES ($1, $2)", chatID, message)
+	if err != nil {
+		log.Printf("Error saving chat history: %v", err)
+	}
+}
+
+func mainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
+	return tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("🚀 Start"),
+			tgbotapi.NewKeyboardButton("ℹ️ Help"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("📊 Status"),
+			tgbotapi.NewKeyboardButton("⚙️ Settings"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("💬 Chats"),
+		),
+	)
 }
