@@ -7,7 +7,7 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - SERVER_URL=${SERVER_URL}
-      - WEBHOOK_URL=${WEBHOOK_URL}
+      - WEBHOOK_URL=https://gpt.${BOT_DOMAIN}
       - USE_WEBHOOK=${USE_WEBHOOK}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -17,8 +17,14 @@ services:
       - db
     volumes:
       - .:/app
-    ports:
-      - "8080:8080"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.bot.rule=Host(`gpt.${BOT_DOMAIN}`)
+      - traefik.http.routers.bot.entrypoints=https
+      - traefik.http.routers.bot.tls=true
+      - traefik.http.routers.bot.tls.certresolver=letsencrypt
+    networks:
+      - traefik-public
 
   db:
     image: postgres:14
@@ -30,6 +36,12 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    networks:
+      - traefik-public
 
 volumes:
   postgres_data:
+
+networks:
+  traefik-public:
+    external: true
