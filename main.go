@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/go-resty/resty/v2"
@@ -135,6 +136,8 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 			handleStatusCommand(bot, update)
 		case strings.HasPrefix(text, "/settings"):
 			handleSettingsCommand(bot, update)
+		case strings.HasPrefix(text, "/chats"):
+			handleChatsCommand(bot, update)
 		default:
 			response := getChatGPTResponse(update.Message.Chat.ID, text)
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
@@ -213,6 +216,41 @@ func handleModelChange(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	bot.Send(msg)
 }
 
+func handleChatsCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	rows, err := db.Query("SELECT DISTINCT chat_id FROM chat_models")
+	if err != nil {
+		log.Printf("Error fetching chat list: %v", err)
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Failed to fetch chat list")
+		bot.Send(msg)
+		return
+	}
+	defer rows.Close()
+
+	var chatIDs []int64
+	for rows.Next() {
+		var chatID int64
+		if err := rows.Scan(&chatID); err != nil {
+			log.Printf("Error scanning chat ID: %v", err)
+			continue
+		}
+		chatIDs = append(chatIDs, chatID)
+	}
+
+	if len(chatIDs) == 0 {
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "No chats found")
+		bot.Send(msg)
+		return
+	}
+
+	message := "Here are the chats you can continue:\n"
+	for _, chatID := range chatIDs {
+		message += "/continue_" + strconv.FormatInt(chatID, 10) + "\n"
+	}
+
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
+	bot.Send(msg)
+}
+
 func getChatGPTResponse(chatID int64, message string) string {
 	client := resty.New()
 
@@ -284,12 +322,15 @@ func getChatGPTResponse(chatID int64, message string) string {
 func mainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
 	return tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("/start"),
-			tgbotapi.NewKeyboardButton("/help"),
+			tgbotapi.NewKeyboardButton("🚀 Start"),
+			tgbotapi.NewKeyboardButton("ℹ️ Help"),
 		),
 		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("/status"),
-			tgbotapi.NewKeyboardButton("/settings"),
+			tgbotapi.NewKeyboardButton("📊 Status"),
+			tgbotapi.NewKeyboardButton("⚙️ Settings"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("💬 Chats"),
 		),
 	)
 }
