@@ -123,7 +123,7 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		} else {
 			response := getChatGPTResponse(update.Message.Chat.ID, text)
 
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, EscapeMarkdownV2(response))
 			msg.ParseMode = "MarkdownV2"
 
 			bot.Send(msg)
@@ -195,10 +195,25 @@ func getChatGPTResponse(chatID int64, message string) string {
 	}
 
 	if len(responseBody.Choices) > 0 {
-		return formatCode(responseBody.Choices[0].Message.Content)
+		return EscapeMarkdownV2(responseBody.Choices[0].Message.Content)
 	}
 
 	return "I couldn't process your request."
+}
+
+// EscapeMarkdownV2 экранирует специальные символы для использования в MarkdownV2
+func EscapeMarkdownV2(text string) string {
+	specialChars := "_*[]()~`>#+-=|{}.!"
+	escapedText := strings.Builder{}
+
+	for _, char := range text {
+		if strings.ContainsRune(specialChars, char) {
+			escapedText.WriteRune('\\')
+		}
+		escapedText.WriteRune(char)
+	}
+
+	return escapedText.String()
 }
 
 func formatCode(text string) string {
