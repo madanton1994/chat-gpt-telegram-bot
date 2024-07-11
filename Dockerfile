@@ -16,7 +16,6 @@ COPY wait-for-it.sh /wait-for-it.sh
 RUN go build -o /app/telegram-chatgpt-bot
 
 RUN ls -la /app
-RUN file /app/telegram-chatgpt-bot
 
 EXPOSE 8080
 
