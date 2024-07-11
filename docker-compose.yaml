@@ -9,7 +9,7 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - SERVER_URL=${SERVER_URL}
-      - WEBHOOK_URL=https://gpt.${BOT_DOMAIN}
+      - WEBHOOK_URL=https://${BOT_DOMAIN}
       - USE_WEBHOOK=${USE_WEBHOOK}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -19,8 +19,6 @@ services:
       - db
     networks:
       - traefik-public
-    volumes:
-      - .:/app
     labels:
       - traefik.enable=true
       - traefik.http.routers.bot.rule=Host(`${BOT_DOMAIN}`)
