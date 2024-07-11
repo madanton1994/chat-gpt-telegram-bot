@@ -222,6 +222,7 @@ func handleModelChange(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	}
 
 	model := args[1]
+	log.Printf("Changing model to: %s for chat ID: %d", model, update.Message.Chat.ID)
 
 	_, err := db.Exec("INSERT INTO chat_models (chat_id, model) VALUES ($1, $2) ON CONFLICT (chat_id) DO UPDATE SET model = $2", update.Message.Chat.ID, model)
 	if err != nil {
@@ -236,6 +237,7 @@ func handleModelChange(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 }
 
 func handleChatsCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	log.Println("Fetching chat list...")
 	rows, err := db.Query("SELECT DISTINCT chat_id FROM chat_models")
 	if err != nil {
 		log.Printf("Error fetching chat list: %v", err)
@@ -254,15 +256,22 @@ func handleChatsCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		}
 		chatIDs = append(chatIDs, chatID)
 	}
-
-	if len(chatIDs) == 0 {
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "No chats found")
+	if err := rows.Err(); err != nil {
+		log.Printf("Error iterating chat rows: %v", err)
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Failed to fetch chat list")
 		bot.Send(msg)
 		return
 	}
 
-	message := "Here are the chats you can continue:"
-	keyboard := tgbotapi.NewInlineKeyboardMarkup()
+	if len(chatIDs) == 0 {
+		message := "No chats found"
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
+		bot.Send(msg)
+		return
+	}
+
+	message := "Select a chat to continue:"
+	keyboard := tgbotapi.InlineKeyboardMarkup{}
 	for _, chatID := range chatIDs {
 		button := tgbotapi.NewInlineKeyboardButtonData("Continue chat "+strconv.FormatInt(chatID, 10), "/continue_"+strconv.FormatInt(chatID, 10))
 		keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, tgbotapi.NewInlineKeyboardRow(button))
