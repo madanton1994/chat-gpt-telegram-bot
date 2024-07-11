@@ -144,24 +144,16 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 }
 
 func handleStartCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	message := "Welcome! I am your ChatGPT bot. You can use the following commands:\n" +
-		"/start - Show welcome message\n" +
-		"/help - Show this help message\n" +
-		"/model <model-name> - Change the model\n" +
-		"/status - Show current status\n" +
-		"/settings - Show settings"
+	message := "Welcome! I am your ChatGPT bot. You can use the following commands:"
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
+	msg.ReplyMarkup = mainMenuKeyboard()
 	bot.Send(msg)
 }
 
 func handleHelpCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	message := "Here are the commands you can use:\n" +
-		"/start - Show welcome message\n" +
-		"/help - Show this help message\n" +
-		"/model <model-name> - Change the model\n" +
-		"/status - Show current status\n" +
-		"/settings - Show settings"
+	message := "Here are the commands you can use:"
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
+	msg.ReplyMarkup = mainMenuKeyboard()
 	bot.Send(msg)
 }
 
@@ -287,4 +279,17 @@ func getChatGPTResponse(chatID int64, message string) string {
 	}
 
 	return "I couldn't process your request."
+}
+
+func mainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
+	return tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("/start"),
+			tgbotapi.NewKeyboardButton("/help"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("/status"),
+			tgbotapi.NewKeyboardButton("/settings"),
+		),
+	)
 }
