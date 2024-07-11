@@ -3,7 +3,7 @@ FROM golang:1.21.6-alpine
 RUN mkdir -p /app
 WORKDIR /app
 
-RUN apk add --no-cache bash
+RUN apk add --no-cache bash coreutils
 
 COPY go.mod ./
 COPY go.sum ./
@@ -14,6 +14,8 @@ COPY . .
 COPY wait-for-it.sh /wait-for-it.sh
 
 RUN go build -o /app/telegram-chatgpt-bot
+
+RUN chmod +x /app/telegram-chatgpt-bot
 
 RUN ls -la /app
 

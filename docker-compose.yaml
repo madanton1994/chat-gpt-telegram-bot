@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   bot:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -12,19 +14,19 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
     depends_on:
       - db
+    networks:
+      - traefik-public
     volumes:
       - .:/app
     labels:
       - traefik.enable=true
-      - traefik.http.routers.bot.rule=Host(`gpt.${BOT_DOMAIN}`)
+      - traefik.http.routers.bot.rule=Host(`${BOT_DOMAIN}`)
       - traefik.http.routers.bot.entrypoints=https
       - traefik.http.routers.bot.tls=true
       - traefik.http.routers.bot.tls.certresolver=letsencrypt
-    networks:
-      - traefik-public
 
   db:
     image: postgres:14
@@ -34,10 +36,10 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     networks:
       - traefik-public
+    ports:
+      - "5432:5432"
 
 volumes:
   postgres_data:
