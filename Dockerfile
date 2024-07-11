@@ -2,11 +2,9 @@ FROM golang:1.21.6-alpine
 
 WORKDIR /app
 
-RUN apk add --no-cache bash
-
 COPY go.mod ./
 COPY go.sum ./
-RUN go mod download
+RUN apk add --no-cache bash && go mod download
 
 COPY . .
 
@@ -16,4 +14,4 @@ RUN go build -o telegram-chatgpt-bot
 
 EXPOSE 8080
 
-CMD ["/wait-for-it.sh", "db:5432", "--", "./telegram-chatgpt-bot"]
+CMD ["/wait-for-it.sh", "db:5432", "--", "/app/telegram-chatgpt-bot"]
