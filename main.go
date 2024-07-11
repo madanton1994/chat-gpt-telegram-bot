@@ -138,6 +138,10 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 			handleSettingsCommand(bot, update)
 		case strings.HasPrefix(text, "/chats"):
 			handleChatsCommand(bot, update)
+		case strings.HasPrefix(text, "/continue_"):
+			handleContinueChatCommand(bot, update)
+		case strings.HasPrefix(text, "/back"):
+			handleStartCommand(bot, update)
 		default:
 			response := getChatGPTResponse(update.Message.Chat.ID, text)
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
@@ -242,12 +246,35 @@ func handleChatsCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		return
 	}
 
-	message := "Here are the chats you can continue:\n"
+	message := "Here are the chats you can continue:"
+	keyboard := tgbotapi.NewInlineKeyboardMarkup()
 	for _, chatID := range chatIDs {
-		message += "/continue_" + strconv.FormatInt(chatID, 10) + "\n"
+		buttonText := "Chat ID " + strconv.FormatInt(chatID, 10)
+		callbackData := "/continue_" + strconv.FormatInt(chatID, 10)
+		button := tgbotapi.NewInlineKeyboardButtonData(buttonText, callbackData)
+		keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, tgbotapi.NewInlineKeyboardRow(button))
 	}
 
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
+	msg.ReplyMarkup = keyboard
+	bot.Send(msg)
+}
+
+func handleContinueChatCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	chatIDStr := strings.TrimPrefix(update.Message.Text, "/continue_")
+	chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
+	if err != nil {
+		log.Printf("Error parsing chat ID: %v", err)
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Invalid chat ID")
+		bot.Send(msg)
+		return
+	}
+
+	// Assuming here we would load chat history if needed
+	// For simplicity, we'll just send a message that the chat is continued
+	message := "Continuing chat with ID " + strconv.FormatInt(chatID, 10)
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
+	msg.ReplyMarkup = backToMenuKeyboard()
 	bot.Send(msg)
 }
 
@@ -331,6 +358,14 @@ func mainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
 		),
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("💬 Chats"),
+		),
+	)
+}
+
+func backToMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
+	return tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("🔙 Back to Menu"),
 		),
 	)
 }
