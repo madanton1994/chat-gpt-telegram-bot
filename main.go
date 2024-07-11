@@ -229,17 +229,27 @@ func getChatGPTResponse(chatID int64, message string) string {
 
 // EscapeMarkdownV2 экранирует специальные символы для использования в MarkdownV2
 func EscapeMarkdownV2(text string) string {
-	specialChars := "_*[]()~`>#+-=|{}.!"
-	escapedText := strings.Builder{}
-
-	for _, char := range text {
-		if strings.ContainsRune(specialChars, char) {
-			escapedText.WriteString(`\`)
-		}
-		escapedText.WriteRune(char)
-	}
-
-	return escapedText.String()
+	replacer := strings.NewReplacer(
+		"_", "\\_",
+		"*", "\\*",
+		"[", "\\[",
+		"]", "\\]",
+		"(", "\\(",
+		")", "\\)",
+		"~", "\\~",
+		"`", "\\`",
+		">", "\\>",
+		"#", "\\#",
+		"+", "\\+",
+		"-", "\\-",
+		"=", "\\=",
+		"|", "\\|",
+		"{", "\\{",
+		"}", "\\}",
+		".", "\\.",
+		"!", "\\!",
+	)
+	return replacer.Replace(text)
 }
 
 func formatCode(text string) string {
