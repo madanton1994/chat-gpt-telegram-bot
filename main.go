@@ -85,6 +85,8 @@ func main() {
 		for update := range updates {
 			if update.Message != nil {
 				handleUpdate(bot, update)
+			} else if update.CallbackQuery != nil {
+				handleCallbackQuery(bot, update.CallbackQuery)
 			}
 		}
 	} else {
@@ -96,6 +98,8 @@ func main() {
 		for update := range updates {
 			if update.Message != nil {
 				handleUpdate(bot, update)
+			} else if update.CallbackQuery != nil {
+				handleCallbackQuery(bot, update.CallbackQuery)
 			}
 		}
 	}
@@ -145,11 +149,19 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 				handleContinueChatCommand(bot, update)
 			} else {
 				response := getChatGPTResponse(update.Message.Chat.ID, text)
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, formatCodeMarkdown(response))
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, EscapeMarkdownV2(response))
 				msg.ParseMode = "MarkdownV2"
 				bot.Send(msg)
 			}
 		}
+	}
+}
+
+func handleCallbackQuery(bot *tgbotapi.BotAPI, query *tgbotapi.CallbackQuery) {
+	data := query.Data
+	if strings.HasPrefix(data, "/continue_") {
+		update := tgbotapi.Update{Message: &tgbotapi.Message{Chat: query.Message.Chat, Text: data}}
+		handleContinueChatCommand(bot, update)
 	}
 }
 
@@ -252,12 +264,9 @@ func handleChatsCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	message := "Here are the chats you can continue:"
 	keyboard := tgbotapi.NewInlineKeyboardMarkup()
 	for _, chatID := range chatIDs {
-		buttonText := "Chat ID " + strconv.FormatInt(chatID, 10)
-		callbackData := "/continue_" + strconv.FormatInt(chatID, 10)
-		button := tgbotapi.NewInlineKeyboardButtonData(buttonText, callbackData)
+		button := tgbotapi.NewInlineKeyboardButtonData("Continue chat "+strconv.FormatInt(chatID, 10), "/continue_"+strconv.FormatInt(chatID, 10))
 		keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, tgbotapi.NewInlineKeyboardRow(button))
 	}
-
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
 	msg.ReplyMarkup = keyboard
 	bot.Send(msg)
@@ -368,6 +377,29 @@ func formatCodeMarkdown(text string) string {
 		}
 	}
 	return sb.String()
+}
+
+func EscapeMarkdownV2(text string) string {
+	replacer := strings.NewReplacer(
+		`_`, `\_`,
+		`*`, `\*`,
+		`[`, `\[`,
+		`]`, `\]`,
+		`(`, `\(`,
+		`)`, `\)`,
+		`~`, `\~`,
+		`>`, `\>`,
+		`#`, `\#`,
+		`+`, `\+`,
+		`-`, `\-`,
+		`=`, `\=`,
+		`|`, `\|`,
+		`{`, `\{`,
+		`}`, `\}`,
+		`.`, `\.`,
+		`!`, `\!`,
+	)
+	return replacer.Replace(text)
 }
 
 func mainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
