@@ -124,17 +124,84 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	if update.Message != nil {
 		text := update.Message.Text
 
-		if strings.HasPrefix(text, "/model") {
+		switch {
+		case strings.HasPrefix(text, "/start"):
+			handleStartCommand(bot, update)
+		case strings.HasPrefix(text, "/help"):
+			handleHelpCommand(bot, update)
+		case strings.HasPrefix(text, "/model"):
 			handleModelChange(bot, update)
-		} else {
+		case strings.HasPrefix(text, "/status"):
+			handleStatusCommand(bot, update)
+		case strings.HasPrefix(text, "/settings"):
+			handleSettingsCommand(bot, update)
+		default:
 			response := getChatGPTResponse(update.Message.Chat.ID, text)
-
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
 			msg.ParseMode = "HTML"
-
 			bot.Send(msg)
 		}
 	}
+}
+
+func handleStartCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	message := "Welcome! I am your ChatGPT bot. You can use the following commands:\n" +
+		"/start - Show welcome message\n" +
+		"/help - Show this help message\n" +
+		"/model <model-name> - Change the model\n" +
+		"/status - Show current status\n" +
+		"/settings - Show settings"
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
+	msg.ParseMode = "HTML"
+	bot.Send(msg)
+}
+
+func handleHelpCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	message := "Here are the commands you can use:\n" +
+		"/start - Show welcome message\n" +
+		"/help - Show this help message\n" +
+		"/model <model-name> - Change the model\n" +
+		"/status - Show current status\n" +
+		"/settings - Show settings"
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
+	msg.ParseMode = "HTML"
+	bot.Send(msg)
+}
+
+func handleStatusCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	var model string
+	err := db.QueryRow("SELECT model FROM chat_models WHERE chat_id = $1", update.Message.Chat.ID).Scan(&model)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			model = "default (gpt-3.5-turbo)"
+		} else {
+			log.Printf("Error querying model: %v", err)
+			model = "unknown"
+		}
+	}
+	message := "Bot is running.\nCurrent model: " + model
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
+	msg.ParseMode = "HTML"
+	bot.Send(msg)
+}
+
+func handleSettingsCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	var model string
+	err := db.QueryRow("SELECT model FROM chat_models WHERE chat_id = $1", update.Message.Chat.ID).Scan(&model)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			model = "gpt-3.5-turbo"
+		} else {
+			log.Printf("Error querying model: %v", err)
+			model = "unknown"
+		}
+	}
+	message := "Settings:\n" +
+		"Current model: " + model + "\n" +
+		"Use /model <model-name> to change the model."
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
+	msg.ParseMode = "HTML"
+	bot.Send(msg)
 }
 
 func handleModelChange(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
