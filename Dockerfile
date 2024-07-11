@@ -11,8 +11,6 @@ RUN go mod download
 
 COPY . .
 
-COPY wait-for-it.sh /wait-for-it.sh
-
 RUN go build -o /app/telegram-chatgpt-bot
 
 RUN chmod +x /app/telegram-chatgpt-bot
@@ -21,4 +19,4 @@ RUN ls -la /app
 
 EXPOSE 8080
 
-CMD ["sh", "/wait-for-it.sh", "db:5432", "--", "/app/telegram-chatgpt-bot"]
+CMD ["/app/telegram-chatgpt-bot"]

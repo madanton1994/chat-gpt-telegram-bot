@@ -47,10 +47,12 @@ func main() {
 	}
 	defer db.Close()
 
+	log.Println("Connecting to the database...")
 	err = db.Ping()
 	if err != nil {
 		log.Fatalf("Error connecting to the database: %v", err)
 	}
+	log.Println("Successfully connected to the database.")
 
 	runMigrations(databaseURL)
 
@@ -97,6 +99,7 @@ func main() {
 }
 
 func runMigrations(databaseURL string) {
+	log.Println("Running database migrations...")
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
 		log.Fatalf("Could not create database driver: %v", err)
@@ -112,6 +115,7 @@ func runMigrations(databaseURL string) {
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		log.Fatalf("Could not apply migrations: %v", err)
 	}
+	log.Println("Database migrations completed successfully.")
 }
 
 func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
