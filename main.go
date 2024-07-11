@@ -125,28 +125,30 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	if update.Message != nil {
 		text := update.Message.Text
 
-		switch {
-		case strings.HasPrefix(text, "/start"):
+		switch text {
+		case "🚀 Start":
 			handleStartCommand(bot, update)
-		case strings.HasPrefix(text, "/help"):
+		case "ℹ️ Help":
 			handleHelpCommand(bot, update)
-		case strings.HasPrefix(text, "/model"):
-			handleModelChange(bot, update)
-		case strings.HasPrefix(text, "/status"):
+		case "📊 Status":
 			handleStatusCommand(bot, update)
-		case strings.HasPrefix(text, "/settings"):
+		case "⚙️ Settings":
 			handleSettingsCommand(bot, update)
-		case strings.HasPrefix(text, "/chats"):
+		case "💬 Chats":
 			handleChatsCommand(bot, update)
-		case strings.HasPrefix(text, "/continue_"):
-			handleContinueChatCommand(bot, update)
-		case strings.HasPrefix(text, "/back"):
+		case "🔙 Back to Menu":
 			handleStartCommand(bot, update)
 		default:
-			response := getChatGPTResponse(update.Message.Chat.ID, text)
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, formatCodeMarkdown(response))
-			msg.ParseMode = "MarkdownV2"
-			bot.Send(msg)
+			if strings.HasPrefix(text, "/model") {
+				handleModelChange(bot, update)
+			} else if strings.HasPrefix(text, "/continue_") {
+				handleContinueChatCommand(bot, update)
+			} else {
+				response := getChatGPTResponse(update.Message.Chat.ID, text)
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, formatCodeMarkdown(response))
+				msg.ParseMode = "MarkdownV2"
+				bot.Send(msg)
+			}
 		}
 	}
 }
