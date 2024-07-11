@@ -1,5 +1,6 @@
-CREATE TABLE IF NOT EXISTS chat_sessions (
+CREATE TABLE IF NOT EXISTS chat_history (
     id SERIAL PRIMARY KEY,
     chat_id BIGINT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    message TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );

@@ -181,12 +181,12 @@ func sendChatList(bot *tgbotapi.BotAPI, chatID int64) {
 
 	var chatIDs []int64
 	for rows.Next() {
-		var chatID int64
-		if err := rows.Scan(&chatID); err != nil {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
 			log.Printf("Error scanning chat ID: %v", err)
 			continue
 		}
-		chatIDs = append(chatIDs, chatID)
+		chatIDs = append(chatIDs, id)
 	}
 
 	if len(chatIDs) == 0 {
