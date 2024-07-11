@@ -18,4 +18,4 @@ RUN ls -la /app
 
 EXPOSE 8080
 
-CMD ["/wait-for-it.sh", "db:5432", "--", "/app/telegram-chatgpt-bot"]
+CMD ["/app/telegram-chatgpt-bot"]
