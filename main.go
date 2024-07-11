@@ -144,7 +144,8 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 			handleStartCommand(bot, update)
 		default:
 			response := getChatGPTResponse(update.Message.Chat.ID, text)
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, formatCodeMarkdown(response))
+			msg.ParseMode = "MarkdownV2"
 			bot.Send(msg)
 		}
 	}
@@ -340,10 +341,31 @@ func getChatGPTResponse(chatID int64, message string) string {
 	}
 
 	if len(responseBody.Choices) > 0 {
-		return responseBody.Choices[0].Message.Content
+		return formatCodeMarkdown(responseBody.Choices[0].Message.Content)
 	}
 
 	return "I couldn't process your request."
+}
+
+func formatCodeMarkdown(text string) string {
+	var sb strings.Builder
+	inCodeBlock := false
+	lines := strings.Split(text, "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "```") {
+			if inCodeBlock {
+				sb.WriteString("\n```")
+				inCodeBlock = false
+			} else {
+				sb.WriteString("```\n")
+				inCodeBlock = true
+			}
+		} else {
+			sb.WriteString(line)
+			sb.WriteString("\n")
+		}
+	}
+	return sb.String()
 }
 
 func mainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
