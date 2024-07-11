@@ -186,7 +186,8 @@ func getChatGPTResponse(chatID int64, message string) string {
 		} `json:"choices"`
 	}{}
 
-	_, err = client.R().
+	log.Println("Sending request to OpenAI API...")
+	resp, err := client.R().
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Authorization", "Bearer "+openaiAPIKey).
 		SetBody(requestBody).
@@ -197,6 +198,9 @@ func getChatGPTResponse(chatID int64, message string) string {
 		log.Printf("Error: %v", err)
 		return "An error occurred while processing your request."
 	}
+
+	log.Printf("OpenAI API response status: %d", resp.StatusCode())
+	log.Printf("OpenAI API response body: %s", resp.String())
 
 	if len(responseBody.Choices) > 0 {
 		return EscapeMarkdownV2(responseBody.Choices[0].Message.Content)
