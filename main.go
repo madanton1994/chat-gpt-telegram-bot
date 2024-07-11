@@ -85,8 +85,6 @@ func main() {
 		for update := range updates {
 			if update.Message != nil {
 				handleUpdate(bot, update)
-			} else if update.CallbackQuery != nil {
-				handleCallbackQuery(bot, update.CallbackQuery)
 			}
 		}
 	} else {
@@ -98,8 +96,6 @@ func main() {
 		for update := range updates {
 			if update.Message != nil {
 				handleUpdate(bot, update)
-			} else if update.CallbackQuery != nil {
-				handleCallbackQuery(bot, update.CallbackQuery)
 			}
 		}
 	}
@@ -127,186 +123,100 @@ func runMigrations(databaseURL string) {
 
 func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	if update.Message != nil {
-		saveChat(update.Message.Chat.ID, update.Message.Text)
-
 		text := update.Message.Text
 
 		switch text {
 		case "🚀 Start":
-			handleStartCommand(bot, update)
+			handleStart(bot, update)
 		case "ℹ️ Help":
-			handleHelpCommand(bot, update)
+			handleHelp(bot, update)
 		case "📊 Status":
-			handleStatusCommand(bot, update)
+			handleStatus(bot, update)
 		case "⚙️ Settings":
-			handleSettingsCommand(bot, update)
+			handleSettings(bot, update)
 		case "💬 Chats":
-			handleChatsCommand(bot, update)
-		case "🔙 Back to Menu":
-			handleStartCommand(bot, update)
+			handleChats(bot, update)
 		default:
-			if strings.HasPrefix(text, "/model") {
-				handleModelChange(bot, update)
-			} else if strings.HasPrefix(text, "/continue_") {
-				handleContinueChatCommand(bot, update)
-			} else {
-				response := getChatGPTResponse(update.Message.Chat.ID, text)
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, EscapeMarkdownV2(response))
-				msg.ParseMode = "MarkdownV2"
-				bot.Send(msg)
-			}
+			handleMessage(bot, update)
 		}
 	}
 }
 
-func handleCallbackQuery(bot *tgbotapi.BotAPI, query *tgbotapi.CallbackQuery) {
-	data := query.Data
-	if strings.HasPrefix(data, "/continue_") {
-		update := tgbotapi.Update{Message: &tgbotapi.Message{Chat: query.Message.Chat, Text: data}}
-		handleContinueChatCommand(bot, update)
-	}
-}
-
-func handleStartCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	message := "Welcome! I am your ChatGPT bot. You can use the following commands:"
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
-	msg.ReplyMarkup = mainMenuKeyboard()
+func handleStart(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Welcome! I am your ChatGPT bot. You can use the following commands:")
+	msg.ReplyMarkup = getMainKeyboard()
 	bot.Send(msg)
 }
 
-func handleHelpCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	message := "Here are the commands you can use:"
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
-	msg.ReplyMarkup = mainMenuKeyboard()
+func handleHelp(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Use the buttons to interact with the bot.")
 	bot.Send(msg)
 }
 
-func handleStatusCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	var model string
-	err := db.QueryRow("SELECT model FROM chat_models WHERE chat_id = $1", update.Message.Chat.ID).Scan(&model)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			model = "default (gpt-3.5-turbo)"
-		} else {
-			log.Printf("Error querying model: %v", err)
-			model = "unknown"
-		}
-	}
-	message := "Bot is running.\nCurrent model: " + model
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
+func handleStatus(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Bot is running normally.")
 	bot.Send(msg)
 }
 
-func handleSettingsCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	var model string
-	err := db.QueryRow("SELECT model FROM chat_models WHERE chat_id = $1", update.Message.Chat.ID).Scan(&model)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			model = "gpt-3.5-turbo"
-		} else {
-			log.Printf("Error querying model: %v", err)
-			model = "unknown"
-		}
-	}
-	message := "Settings:\n" +
-		"Current model: " + model + "\n" +
-		"Use /model <model-name> to change the model."
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
+func handleSettings(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "There are no configurable settings at the moment.")
 	bot.Send(msg)
 }
 
-func handleModelChange(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	args := strings.Fields(update.Message.Text)
-	if len(args) < 2 {
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Usage: /model <model-name>")
-		bot.Send(msg)
-		return
-	}
-
-	model := args[1]
-	log.Printf("Changing model to: %s for chat ID: %d", model, update.Message.Chat.ID)
-
-	_, err := db.Exec("INSERT INTO chat_models (chat_id, model) VALUES ($1, $2) ON CONFLICT (chat_id) DO UPDATE SET model = $2", update.Message.Chat.ID, model)
-	if err != nil {
-		log.Printf("Error updating model: %v", err)
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Failed to update model")
-		bot.Send(msg)
-		return
-	}
-
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Model changed to "+model)
-	bot.Send(msg)
-}
-
-func handleChatsCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+func handleChats(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	log.Println("Fetching chat list...")
-	rows, err := db.Query("SELECT DISTINCT chat_id FROM chat_models")
+
+	rows, err := db.Query("SELECT DISTINCT chat_id FROM chat_history")
 	if err != nil {
 		log.Printf("Error fetching chat list: %v", err)
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Failed to fetch chat list")
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Error fetching chat list.")
 		bot.Send(msg)
 		return
 	}
 	defer rows.Close()
 
-	var chatIDs []int64
+	var chatIDs []string
 	for rows.Next() {
 		var chatID int64
 		if err := rows.Scan(&chatID); err != nil {
-			log.Printf("Error scanning chat ID: %v", err)
+			log.Printf("Error scanning chat_id: %v", err)
 			continue
 		}
-		chatIDs = append(chatIDs, chatID)
-	}
-
-	if err := rows.Err(); err != nil {
-		log.Printf("Error iterating chat rows: %v", err)
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Failed to fetch chat list")
-		bot.Send(msg)
-		return
+		chatIDs = append(chatIDs, strconv.FormatInt(chatID, 10))
 	}
 
 	if len(chatIDs) == 0 {
-		message := "No chats found"
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "No chats found.")
 		bot.Send(msg)
-		return
+	} else {
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Active chats: "+strings.Join(chatIDs, ", "))
+		bot.Send(msg)
 	}
+}
 
-	message := "Select a chat to continue:"
-	keyboard := tgbotapi.InlineKeyboardMarkup{}
-	for _, chatID := range chatIDs {
-		button := tgbotapi.NewInlineKeyboardButtonData("Continue chat "+strconv.FormatInt(chatID, 10), "/continue_"+strconv.FormatInt(chatID, 10))
-		keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, tgbotapi.NewInlineKeyboardRow(button))
-	}
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
-	msg.ReplyMarkup = keyboard
+func handleMessage(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	response := getChatGPTResponse(update.Message.Chat.ID, update.Message.Text)
+
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
+	msg.ParseMode = "HTML"
+
 	bot.Send(msg)
 }
 
-func handleContinueChatCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	chatIDStr := strings.TrimPrefix(update.Message.Text, "/continue_")
-	chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
-	if err != nil {
-		log.Printf("Error parsing chat ID: %v", err)
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Invalid chat ID")
-		bot.Send(msg)
-		return
-	}
-
-	// Assuming here we would load chat history if needed
-	// For simplicity, we'll just send a message that the chat is continued
-	message := "Continuing chat with ID " + strconv.FormatInt(chatID, 10)
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
-	msg.ReplyMarkup = backToMenuKeyboard()
-	bot.Send(msg)
-}
-
-func saveChat(chatID int64, message string) {
-	_, err := db.Exec("INSERT INTO chat_history (chat_id, message) VALUES ($1, $2)", chatID, message)
-	if err != nil {
-		log.Printf("Error saving chat message: %v", err)
-	}
+func getMainKeyboard() tgbotapi.ReplyKeyboardMarkup {
+	return tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("🚀 Start"),
+			tgbotapi.NewKeyboardButton("ℹ️ Help"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("📊 Status"),
+			tgbotapi.NewKeyboardButton("⚙️ Settings"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("💬 Chats"),
+		),
+	)
 }
 
 func getChatGPTResponse(chatID int64, message string) string {
@@ -371,76 +281,8 @@ func getChatGPTResponse(chatID int64, message string) string {
 	}
 
 	if len(responseBody.Choices) > 0 {
-		return formatCodeMarkdown(responseBody.Choices[0].Message.Content)
+		return responseBody.Choices[0].Message.Content
 	}
 
 	return "I couldn't process your request."
-}
-
-func formatCodeMarkdown(text string) string {
-	var sb strings.Builder
-	inCodeBlock := false
-	lines := strings.Split(text, "\n")
-	for _, line := range lines {
-		if strings.HasPrefix(line, "```") {
-			if inCodeBlock {
-				sb.WriteString("\n```")
-				inCodeBlock = false
-			} else {
-				sb.WriteString("```\n")
-				inCodeBlock = true
-			}
-		} else {
-			sb.WriteString(line)
-			sb.WriteString("\n")
-		}
-	}
-	return sb.String()
-}
-
-func EscapeMarkdownV2(text string) string {
-	replacer := strings.NewReplacer(
-		`_`, `\_`,
-		`*`, `\*`,
-		`[`, `\[`,
-		`]`, `\]`,
-		`(`, `\(`,
-		`)`, `\)`,
-		`~`, `\~`,
-		`>`, `\>`,
-		`#`, `\#`,
-		`+`, `\+`,
-		`-`, `\-`,
-		`=`, `\=`,
-		`|`, `\|`,
-		`{`, `\{`,
-		`}`, `\}`,
-		`.`, `\.`,
-		`!`, `\!`,
-	)
-	return replacer.Replace(text)
-}
-
-func mainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
-	return tgbotapi.NewReplyKeyboard(
-		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("🚀 Start"),
-			tgbotapi.NewKeyboardButton("ℹ️ Help"),
-		),
-		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("📊 Status"),
-			tgbotapi.NewKeyboardButton("⚙️ Settings"),
-		),
-		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("💬 Chats"),
-		),
-	)
-}
-
-func backToMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
-	return tgbotapi.NewReplyKeyboard(
-		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("🔙 Back to Menu"),
-		),
-	)
 }
