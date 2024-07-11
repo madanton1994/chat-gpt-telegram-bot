@@ -23,7 +23,7 @@ func main() {
 	telegramToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	openaiAPIKey = os.Getenv("OPENAI_API_KEY")
 	serverURL = os.Getenv("SERVER_URL")
-	webhookURL := os.Getenv("WEBHOOK_URL")
+	webhookURL = os.Getenv("WEBHOOK_URL")
 	useWebhook := os.Getenv("USE_WEBHOOK")
 	databaseURL := os.Getenv("DATABASE_URL")
 
@@ -234,7 +234,7 @@ func EscapeMarkdownV2(text string) string {
 
 	for _, char := range text {
 		if strings.ContainsRune(specialChars, char) {
-			escapedText.WriteString(`\\`)
+			escapedText.WriteString(`\`)
 		}
 		escapedText.WriteRune(char)
 	}
