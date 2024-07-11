@@ -127,6 +127,8 @@ func runMigrations(databaseURL string) {
 
 func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	if update.Message != nil {
+		saveChat(update.Message.Chat.ID, update.Message.Text)
+
 		text := update.Message.Text
 
 		switch text {
@@ -256,6 +258,7 @@ func handleChatsCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		}
 		chatIDs = append(chatIDs, chatID)
 	}
+
 	if err := rows.Err(); err != nil {
 		log.Printf("Error iterating chat rows: %v", err)
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Failed to fetch chat list")
@@ -297,6 +300,13 @@ func handleContinueChatCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
 	msg.ReplyMarkup = backToMenuKeyboard()
 	bot.Send(msg)
+}
+
+func saveChat(chatID int64, message string) {
+	_, err := db.Exec("INSERT INTO chat_history (chat_id, message) VALUES ($1, $2)", chatID, message)
+	if err != nil {
+		log.Printf("Error saving chat message: %v", err)
+	}
 }
 
 func getChatGPTResponse(chatID int64, message string) string {
