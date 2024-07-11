@@ -217,4 +217,4 @@ func getChatGPTResponse(chatID int64, message string) string {
 
 	if responseBody.Error.Message != "" {
 		log.Printf("OpenAI API error: %s", responseBody.Error.Message)
-		return "An error occurred:
+		return "An error occurred:"
