@@ -86,6 +86,8 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 
 		if strings.HasPrefix(text, "/") {
 			handleCommand(bot, update.Message.Chat.ID, text)
+		} else if text == "🔙 Back" {
+			sendMainMenu(bot, update.Message.Chat.ID)
 		} else {
 			response := getChatGPTResponse(update.Message.Chat.ID, text)
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
@@ -224,15 +226,21 @@ func getCurrentModel(chatID int64) string {
 	return "gpt-3.5-turbo" // Default model
 }
 
+func sendMainMenu(bot *tgbotapi.BotAPI, chatID int64) {
+	msg := tgbotapi.NewMessage(chatID, "Main menu")
+	msg.ReplyMarkup = mainMenuKeyboard()
+	bot.Send(msg)
+}
+
 func mainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
 	return tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("/start"),
-			tgbotapi.NewKeyboardButton("/help"),
+			tgbotapi.NewKeyboardButton("🚀 Start"),
+			tgbotapi.NewKeyboardButton("ℹ️ Help"),
 		),
 		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("/status"),
-			tgbotapi.NewKeyboardButton("/settings"),
+			tgbotapi.NewKeyboardButton("📊 Status"),
+			tgbotapi.NewKeyboardButton("⚙️ Settings"),
 		),
 	)
 }
