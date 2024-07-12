@@ -7,7 +7,6 @@ import (
 	"os"
 	"regexp"
 	"strconv"
-	"strings"
 
 	"github.com/go-resty/resty/v2"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -196,15 +195,18 @@ func sendChatList(bot *tgbotapi.BotAPI, chatID int64) {
 		return
 	}
 
-	var chatList strings.Builder
-	chatList.WriteString("💬 Active chats:\n")
+	var chatButtons []tgbotapi.KeyboardButton
 	for _, id := range chatIDs {
-		chatList.WriteString("- Chat ID: ")
-		chatList.WriteString(strconv.FormatInt(id, 10))
-		chatList.WriteString("\n")
+		chatButtons = append(chatButtons, tgbotapi.NewKeyboardButton("Chat ID: "+strconv.FormatInt(id, 10)))
 	}
 
-	msg := tgbotapi.NewMessage(chatID, chatList.String())
+	keyboard := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(chatButtons...),
+		tgbotapi.NewKeyboardButtonRow(tgbotapi.NewKeyboardButton("🔙 Back")),
+	)
+
+	msg := tgbotapi.NewMessage(chatID, "💬 Active chats:")
+	msg.ReplyMarkup = keyboard
 	bot.Send(msg)
 }
 
