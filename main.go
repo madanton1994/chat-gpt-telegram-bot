@@ -88,6 +88,12 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 			handleCommand(bot, update.Message.Chat.ID, text)
 		} else if text == "🔙 Back" {
 			sendMainMenu(bot, update.Message.Chat.ID)
+		} else if strings.HasPrefix(text, "Model: ") {
+			model := strings.TrimPrefix(text, "Model: ")
+			saveChatHistory(update.Message.Chat.ID, "Model: "+model)
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "✅ Model switched to: "+model)
+			msg.ReplyMarkup = mainMenuKeyboard()
+			bot.Send(msg)
 		} else {
 			response := getChatGPTResponse(update.Message.Chat.ID, text)
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
