@@ -142,7 +142,7 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		case "💬 Chats":
 			sendChatList(bot, update.Message.Chat.ID)
 		case "🆕 Create Chat":
-			createNewChat(bot, update.Message.Chat.ID)
+			askForChatName(bot, update.Message.Chat.ID)
 		case "❌ Delete Chat":
 			sendDeleteChatMenu(bot, update.Message.Chat.ID)
 		case "🔙 Back":
@@ -179,6 +179,8 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 						bot.Send(msg)
 					}
 				}
+			} else if update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.Text == "Please provide a name for the new chat:" {
+				createNewChat(bot, update.Message.Chat.ID, text)
 			} else {
 				response := getChatGPTResponse(update.Message.Chat.ID, text)
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
@@ -233,7 +235,7 @@ func sendSettingsMenu(bot *tgbotapi.BotAPI, chatID int64) {
 		tgbotapi.NewKeyboardButtonRow(tgbotapi.NewKeyboardButton("🔙 Back")),
 	)
 
-	msg := tgbotapi.NewMessage(chatID, "⚙️ Select the model:")
+	msg := tgbotapi.NewMessage(chatID, "⚙️ Select a model:")
 	msg.ReplyMarkup = keyboard
 	bot.Send(msg)
 }
@@ -241,7 +243,7 @@ func sendSettingsMenu(bot *tgbotapi.BotAPI, chatID int64) {
 func sendChatList(bot *tgbotapi.BotAPI, chatID int64) {
 	log.Println("Fetching chat list...")
 
-	rows, err := db.Query("SELECT DISTINCT chat_id FROM chat_history")
+	rows, err := db.Query("SELECT cn.chat_id, cn.chat_name FROM chat_names cn")
 	if err != nil {
 		log.Printf("Error fetching chat list: %v", err)
 		msg := tgbotapi.NewMessage(chatID, "❌ Error fetching chat list.")
@@ -250,25 +252,21 @@ func sendChatList(bot *tgbotapi.BotAPI, chatID int64) {
 	}
 	defer rows.Close()
 
-	var chatIDs []int64
+	var chatButtons []tgbotapi.KeyboardButton
 	for rows.Next() {
 		var id int64
-		if err := rows.Scan(&id); err != nil {
-			log.Printf("Error scanning chat ID: %v", err)
+		var name string
+		if err := rows.Scan(&id, &name); err != nil {
+			log.Printf("Error scanning chat ID and name: %v", err)
 			continue
 		}
-		chatIDs = append(chatIDs, id)
+		chatButtons = append(chatButtons, tgbotapi.NewKeyboardButton(fmt.Sprintf("Chat ID: %d (%s)", id, name)))
 	}
 
-	if len(chatIDs) == 0 {
+	if len(chatButtons) == 0 {
 		msg := tgbotapi.NewMessage(chatID, "📭 No chats found.")
 		bot.Send(msg)
 		return
-	}
-
-	var chatButtons []tgbotapi.KeyboardButton
-	for _, id := range chatIDs {
-		chatButtons = append(chatButtons, tgbotapi.NewKeyboardButton("Chat ID: "+strconv.FormatInt(id, 10)))
 	}
 
 	keyboard := tgbotapi.NewReplyKeyboard(
@@ -288,7 +286,7 @@ func sendChatList(bot *tgbotapi.BotAPI, chatID int64) {
 func sendDeleteChatMenu(bot *tgbotapi.BotAPI, chatID int64) {
 	log.Println("Fetching chat list for deletion...")
 
-	rows, err := db.Query("SELECT DISTINCT chat_id FROM chat_history")
+	rows, err := db.Query("SELECT cn.chat_id, cn.chat_name FROM chat_names cn")
 	if err != nil {
 		log.Printf("Error fetching chat list: %v", err)
 		msg := tgbotapi.NewMessage(chatID, "❌ Error fetching chat list.")
@@ -297,25 +295,21 @@ func sendDeleteChatMenu(bot *tgbotapi.BotAPI, chatID int64) {
 	}
 	defer rows.Close()
 
-	var chatIDs []int64
+	var chatButtons []tgbotapi.KeyboardButton
 	for rows.Next() {
 		var id int64
-		if err := rows.Scan(&id); err != nil {
-			log.Printf("Error scanning chat ID: %v", err)
+		var name string
+		if err := rows.Scan(&id, &name); err != nil {
+			log.Printf("Error scanning chat ID and name: %v", err)
 			continue
 		}
-		chatIDs = append(chatIDs, id)
+		chatButtons = append(chatButtons, tgbotapi.NewKeyboardButton(fmt.Sprintf("Delete Chat ID: %d (%s)", id, name)))
 	}
 
-	if len(chatIDs) == 0 {
+	if len(chatButtons) == 0 {
 		msg := tgbotapi.NewMessage(chatID, "📭 No chats found.")
 		bot.Send(msg)
 		return
-	}
-
-	var chatButtons []tgbotapi.KeyboardButton
-	for _, id := range chatIDs {
-		chatButtons = append(chatButtons, tgbotapi.NewKeyboardButton("Delete Chat ID: "+strconv.FormatInt(id, 10)))
 	}
 
 	keyboard := tgbotapi.NewReplyKeyboard(
@@ -328,15 +322,29 @@ func sendDeleteChatMenu(bot *tgbotapi.BotAPI, chatID int64) {
 	bot.Send(msg)
 }
 
-func createNewChat(bot *tgbotapi.BotAPI, chatID int64) {
-	// Assuming chat creation logic is handled elsewhere and we get a new chat ID
-	newChatID := chatID + 1 // Example new chat ID
-	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("New chat created with ID: %d", newChatID))
+func askForChatName(bot *tgbotapi.BotAPI, chatID int64) {
+	msg := tgbotapi.NewMessage(chatID, "Please provide a name for the new chat:")
+	bot.Send(msg)
+}
+
+func createNewChat(bot *tgbotapi.BotAPI, chatID int64, chatName string) {
+	_, err := db.Exec("INSERT INTO chat_names (chat_id, chat_name) VALUES ($1, $2)", chatID, chatName)
+	if err != nil {
+		log.Printf("Error creating new chat: %v", err)
+		msg := tgbotapi.NewMessage(chatID, "Failed to create new chat.")
+		bot.Send(msg)
+		return
+	}
+	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("New chat created with ID: %d and name: %s", chatID, chatName))
 	bot.Send(msg)
 }
 
 func deleteChat(chatID int64) error {
 	_, err := db.Exec("DELETE FROM chat_history WHERE chat_id = $1", chatID)
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec("DELETE FROM chat_names WHERE chat_id = $1", chatID)
 	return err
 }
 
