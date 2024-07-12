@@ -129,6 +129,7 @@ func runMigrations(databaseURL string) {
 func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	if update.Message != nil {
 		text := update.Message.Text
+		log.Printf("Received message: %s", text)
 
 		switch text {
 		case "🚀 Start":
@@ -263,6 +264,10 @@ func sendChatList(bot *tgbotapi.BotAPI, chatID int64) {
 		chatButtons = append(chatButtons, tgbotapi.NewKeyboardButton(fmt.Sprintf("Chat ID: %d (%s)", id, name)))
 	}
 
+	if len(chatButtons) == 0 {
+		chatButtons = append(chatButtons, tgbotapi.NewKeyboardButton("No chats available"))
+	}
+
 	keyboard := tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(chatButtons...),
 		tgbotapi.NewKeyboardButtonRow(
@@ -300,6 +305,10 @@ func sendDeleteChatMenu(bot *tgbotapi.BotAPI, chatID int64) {
 		chatButtons = append(chatButtons, tgbotapi.NewKeyboardButton(fmt.Sprintf("Delete Chat ID: %d (%s)", id, name)))
 	}
 
+	if len(chatButtons) == 0 {
+		chatButtons = append(chatButtons, tgbotapi.NewKeyboardButton("No chats available"))
+	}
+
 	keyboard := tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(chatButtons...),
 		tgbotapi.NewKeyboardButtonRow(tgbotapi.NewKeyboardButton("🔙 Back")),
@@ -325,6 +334,7 @@ func createNewChat(bot *tgbotapi.BotAPI, chatID int64, chatName string) {
 	}
 	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("New chat created with ID: %d and name: %s", chatID, chatName))
 	bot.Send(msg)
+	sendChatList(bot, chatID)
 }
 
 func deleteChat(chatID int64) error {
