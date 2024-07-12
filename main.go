@@ -11,9 +11,11 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-var openaiAPIKey string
-var serverURL string
-var modelMap = make(map[int64]string) // Stores the model for each chat ID
+var (
+	openaiAPIKey string
+	serverURL    string
+	modelMap     = make(map[int64]string) // Stores the model for each chat ID
+)
 
 func main() {
 	telegramToken := os.Getenv("TELEGRAM_BOT_TOKEN")
@@ -22,17 +24,7 @@ func main() {
 	webhookURL := os.Getenv("WEBHOOK_URL")
 	useWebhook := os.Getenv("USE_WEBHOOK")
 
-	if telegramToken == "" {
-		log.Fatal("TELEGRAM_BOT_TOKEN is not set")
-	}
-	if openaiAPIKey == "" {
-		log.Fatal("OPENAI_API_KEY is not set")
-	}
-	if serverURL == "" {
-		log.Fatal("SERVER_URL is not set")
-	}
-
-	log.Printf("Using OpenAI API Key: %s", openaiAPIKey)
+	validateEnvVars(telegramToken, openaiAPIKey, serverURL)
 
 	bot, err := tgbotapi.NewBotAPI(telegramToken)
 	if err != nil {
@@ -43,89 +35,97 @@ func main() {
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
 	if useWebhook == "true" && webhookURL != "" {
-		webhookConfig, err := tgbotapi.NewWebhook(webhookURL)
-		if err != nil {
-			log.Fatal(err)
-		}
-		_, err = bot.Request(webhookConfig)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		updates := bot.ListenForWebhook("/")
-
-		go http.ListenAndServe(":8080", nil)
-		log.Printf("Listening on :8080")
-
-		for update := range updates {
-			if update.Message != nil {
-				handleUpdate(bot, update)
-			}
-		}
+		setupWebhook(bot, webhookURL)
 	} else {
-		u := tgbotapi.NewUpdate(0)
-		u.Timeout = 60
+		setupPolling(bot)
+	}
+}
 
-		updates := bot.GetUpdatesChan(u)
+func validateEnvVars(vars ...string) {
+	for _, v := range vars {
+		if v == "" {
+			log.Fatalf("%s is not set", v)
+		}
+	}
+}
 
-		for update := range updates {
-			if update.Message != nil {
-				handleUpdate(bot, update)
-			}
+func setupWebhook(bot *tgbotapi.BotAPI, webhookURL string) {
+	webhookConfig, err := tgbotapi.NewWebhook(webhookURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = bot.Request(webhookConfig)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	updates := bot.ListenForWebhook("/")
+	go http.ListenAndServe(":8080", nil)
+	log.Printf("Listening on :8080")
+
+	processUpdates(bot, updates)
+}
+
+func setupPolling(bot *tgbotapi.BotAPI) {
+	u := tgbotapi.NewUpdate(0)
+	u.Timeout = 60
+	updates := bot.GetUpdatesChan(u)
+	processUpdates(bot, updates)
+}
+
+func processUpdates(bot *tgbotapi.BotAPI, updates tgbotapi.UpdatesChannel) {
+	for update := range updates {
+		if update.Message != nil {
+			handleUpdate(bot, update)
 		}
 	}
 }
 
 func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	if update.Message != nil {
-		text := update.Message.Text
-		log.Printf("Received message: %s", text)
+	if update.Message == nil {
+		return
+	}
+	text := update.Message.Text
+	log.Printf("Received message: %s", text)
 
-		switch text {
-		case "🚀 Start":
-			sendWelcomeMessage(bot, update.Message.Chat.ID)
-		case "ℹ️ Help":
-			sendHelpMessage(bot, update.Message.Chat.ID)
-		case "📊 Status":
-			sendStatusMessage(bot, update.Message.Chat.ID)
-		case "⚙️ Settings":
-			sendSettingsMenu(bot, update.Message.Chat.ID)
-		case "🔙 Back":
-			sendWelcomeMessage(bot, update.Message.Chat.ID)
-		default:
-			if strings.HasPrefix(text, "Model: ") {
-				model := strings.TrimPrefix(text, "Model: ")
-				modelMap[update.Message.Chat.ID] = model
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Model set to "+model)
-				bot.Send(msg)
-			} else {
-				response := getChatGPTResponse(update.Message.Chat.ID, text)
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
-				msg.ParseMode = "HTML"
-				msg.ReplyMarkup = mainMenuKeyboard()
-				bot.Send(msg)
-			}
-		}
+	switch {
+	case text == "🚀 Start":
+		sendWelcomeMessage(bot, update.Message.Chat.ID)
+	case text == "ℹ️ Help":
+		sendHelpMessage(bot, update.Message.Chat.ID)
+	case text == "📊 Status":
+		sendStatusMessage(bot, update.Message.Chat.ID)
+	case text == "⚙️ Settings":
+		sendSettingsMenu(bot, update.Message.Chat.ID)
+	case text == "🔙 Back":
+		sendWelcomeMessage(bot, update.Message.Chat.ID)
+	case strings.HasPrefix(text, "Model: "):
+		setModel(bot, update.Message.Chat.ID, strings.TrimPrefix(text, "Model: "))
+	default:
+		response := getChatGPTResponse(update.Message.Chat.ID, text)
+		sendMessage(bot, update.Message.Chat.ID, response)
 	}
 }
 
+func setModel(bot *tgbotapi.BotAPI, chatID int64, model string) {
+	modelMap[chatID] = model
+	sendMessage(bot, chatID, "Model set to "+model)
+}
+
 func sendWelcomeMessage(bot *tgbotapi.BotAPI, chatID int64) {
-	msg := tgbotapi.NewMessage(chatID, "👋 Welcome! I am your ChatGPT bot. You can use the following commands:")
-	msg.ReplyMarkup = mainMenuKeyboard()
-	bot.Send(msg)
+	msg := "👋 Welcome! I am your ChatGPT bot. You can use the following commands:"
+	sendMessageWithKeyboard(bot, chatID, msg, mainMenuKeyboard())
 }
 
 func sendHelpMessage(bot *tgbotapi.BotAPI, chatID int64) {
-	msg := tgbotapi.NewMessage(chatID, "ℹ️ Here is a list of commands you can use:\n/start - Start the bot\n/help - Show this help message\n/status - Show bot status\n/settings - Show settings")
-	msg.ReplyMarkup = mainMenuKeyboard()
-	bot.Send(msg)
+	msg := "ℹ️ Here is a list of commands you can use:\n/start - Start the bot\n/help - Show this help message\n/status - Show bot status\n/settings - Show settings"
+	sendMessageWithKeyboard(bot, chatID, msg, mainMenuKeyboard())
 }
 
 func sendStatusMessage(bot *tgbotapi.BotAPI, chatID int64) {
 	model := getCurrentModel(chatID)
-	msg := tgbotapi.NewMessage(chatID, "📊 All systems are operational.\nCurrent model: "+model)
-	msg.ReplyMarkup = mainMenuKeyboard()
-	bot.Send(msg)
+	msg := "📊 All systems are operational.\nCurrent model: " + model
+	sendMessageWithKeyboard(bot, chatID, msg, mainMenuKeyboard())
 }
 
 func sendSettingsMenu(bot *tgbotapi.BotAPI, chatID int64) {
@@ -136,17 +136,11 @@ func sendSettingsMenu(bot *tgbotapi.BotAPI, chatID int64) {
 		),
 		tgbotapi.NewKeyboardButtonRow(tgbotapi.NewKeyboardButton("🔙 Back")),
 	)
-	keyboard.ResizeKeyboard = true
-	keyboard.OneTimeKeyboard = false
-
-	msg := tgbotapi.NewMessage(chatID, "⚙️ Select a model:")
-	msg.ReplyMarkup = keyboard
-	bot.Send(msg)
+	sendMessageWithKeyboard(bot, chatID, "⚙️ Select a model:", keyboard)
 }
 
 func getChatGPTResponse(chatID int64, message string) string {
 	client := resty.New()
-
 	model := getCurrentModel(chatID)
 
 	requestBody := map[string]interface{}{
@@ -211,8 +205,21 @@ func getCurrentModel(chatID int64) string {
 	return model
 }
 
+func sendMessage(bot *tgbotapi.BotAPI, chatID int64, text string) {
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "HTML"
+	bot.Send(msg)
+}
+
+func sendMessageWithKeyboard(bot *tgbotapi.BotAPI, chatID int64, text string, keyboard tgbotapi.ReplyKeyboardMarkup) {
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "HTML"
+	msg.ReplyMarkup = keyboard
+	bot.Send(msg)
+}
+
 func mainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
-	keyboard := tgbotapi.NewReplyKeyboard(
+	return tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("🚀 Start"),
 			tgbotapi.NewKeyboardButton("ℹ️ Help"),
@@ -222,9 +229,6 @@ func mainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
 			tgbotapi.NewKeyboardButton("⚙️ Settings"),
 		),
 	)
-	keyboard.ResizeKeyboard = true
-	keyboard.OneTimeKeyboard = false
-	return keyboard
 }
 
 func formatAsTelegramCode(content string) string {
