@@ -136,6 +136,8 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 			sendSettingsMessage(bot, update.Message.Chat.ID)
 		case "💬 Chats":
 			sendChatList(bot, update.Message.Chat.ID)
+		case "🔙 Back":
+			sendWelcomeMessage(bot, update.Message.Chat.ID)
 		default:
 			response := getChatGPTResponse(update.Message.Chat.ID, text)
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
@@ -143,6 +145,8 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 			bot.Send(msg)
 			saveChatHistory(update.Message.Chat.ID, text)
 		}
+	} else if update.Message.ReplyToMessage != nil {
+		handleReply(bot, update.Message)
 	}
 }
 
@@ -283,6 +287,15 @@ func saveChatHistory(chatID int64, message string) {
 	if err != nil {
 		log.Printf("Error saving chat history: %v", err)
 	}
+}
+
+func handleReply(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
+	originalMessage := message.ReplyToMessage.Text
+	response := getChatGPTResponse(message.Chat.ID, originalMessage+" "+message.Text)
+	msg := tgbotapi.NewMessage(message.Chat.ID, response)
+	msg.ParseMode = "HTML"
+	bot.Send(msg)
+	saveChatHistory(message.Chat.ID, originalMessage+" "+message.Text)
 }
 
 func mainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
