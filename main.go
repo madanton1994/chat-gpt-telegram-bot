@@ -7,6 +7,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/go-resty/resty/v2"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -19,6 +20,7 @@ import (
 var openaiAPIKey string
 var serverURL string
 var db *sql.DB
+var activeChats map[int64]int64 // stores the active chat ID for each user
 
 func main() {
 	telegramToken := os.Getenv("TELEGRAM_BOT_TOKEN")
@@ -66,6 +68,8 @@ func main() {
 
 	bot.Debug = true
 	log.Printf("Authorized on account %s", bot.Self.UserName)
+
+	activeChats = make(map[int64]int64) // initialize the activeChats map
 
 	if useWebhook == "true" && webhookURL != "" {
 		webhookConfig, err := tgbotapi.NewWebhook(webhookURL)
@@ -133,17 +137,27 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		case "📊 Status":
 			sendStatusMessage(bot, update.Message.Chat.ID)
 		case "⚙️ Settings":
-			sendSettingsMessage(bot, update.Message.Chat.ID)
+			sendSettingsMenu(bot, update.Message.Chat.ID)
 		case "💬 Chats":
 			sendChatList(bot, update.Message.Chat.ID)
 		case "🔙 Back":
 			sendWelcomeMessage(bot, update.Message.Chat.ID)
 		default:
-			response := getChatGPTResponse(update.Message.Chat.ID, text)
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
-			msg.ParseMode = "HTML"
-			bot.Send(msg)
-			saveChatHistory(update.Message.Chat.ID, text)
+			if strings.HasPrefix(text, "Chat ID: ") {
+				chatIDStr := strings.TrimPrefix(text, "Chat ID: ")
+				chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
+				if err == nil {
+					activeChats[update.Message.Chat.ID] = chatID
+					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Switched to chat "+chatIDStr)
+					bot.Send(msg)
+				}
+			} else {
+				response := getChatGPTResponse(update.Message.Chat.ID, text)
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
+				msg.ParseMode = "HTML"
+				bot.Send(msg)
+				saveChatHistory(update.Message.Chat.ID, text)
+			}
 		}
 	} else if update.Message.ReplyToMessage != nil {
 		handleReply(bot, update.Message)
@@ -166,8 +180,17 @@ func sendStatusMessage(bot *tgbotapi.BotAPI, chatID int64) {
 	bot.Send(msg)
 }
 
-func sendSettingsMessage(bot *tgbotapi.BotAPI, chatID int64) {
-	msg := tgbotapi.NewMessage(chatID, "⚙️ Settings options will be available soon.")
+func sendSettingsMenu(bot *tgbotapi.BotAPI, chatID int64) {
+	keyboard := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Model: gpt-3.5-turbo"),
+			tgbotapi.NewKeyboardButton("Model: gpt-4"),
+		),
+		tgbotapi.NewKeyboardButtonRow(tgbotapi.NewKeyboardButton("🔙 Back")),
+	)
+
+	msg := tgbotapi.NewMessage(chatID, "⚙️ Select the model:")
+	msg.ReplyMarkup = keyboard
 	bot.Send(msg)
 }
 
