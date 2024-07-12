@@ -102,6 +102,7 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 				response := getChatGPTResponse(update.Message.Chat.ID, text)
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
 				msg.ParseMode = "HTML"
+				msg.ReplyMarkup = mainMenuKeyboard()
 				bot.Send(msg)
 			}
 		}
@@ -135,6 +136,8 @@ func sendSettingsMenu(bot *tgbotapi.BotAPI, chatID int64) {
 		),
 		tgbotapi.NewKeyboardButtonRow(tgbotapi.NewKeyboardButton("🔙 Back")),
 	)
+	keyboard.ResizeKeyboard = true
+	keyboard.OneTimeKeyboard = false
 
 	msg := tgbotapi.NewMessage(chatID, "⚙️ Select a model:")
 	msg.ReplyMarkup = keyboard
@@ -209,7 +212,7 @@ func getCurrentModel(chatID int64) string {
 }
 
 func mainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
-	return tgbotapi.NewReplyKeyboard(
+	keyboard := tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("🚀 Start"),
 			tgbotapi.NewKeyboardButton("ℹ️ Help"),
@@ -219,6 +222,9 @@ func mainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
 			tgbotapi.NewKeyboardButton("⚙️ Settings"),
 		),
 	)
+	keyboard.ResizeKeyboard = true
+	keyboard.OneTimeKeyboard = false
+	return keyboard
 }
 
 func formatAsTelegramCode(content string) string {
