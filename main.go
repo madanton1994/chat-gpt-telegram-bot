@@ -324,6 +324,9 @@ func countTokensFromMessages(messages []map[string]string, answer, model string)
 	case "gpt-4", "gpt-4-1106-preview", "gpt-4-vision-preview", "gpt-4o":
 		tokensPerMessage = 3
 		tokensPerName = 1
+	case "text-davinci-003":
+		tokensPerMessage = 4
+		tokensPerName = -1
 	default:
 		return 0, 0, fmt.Errorf("unknown model: %s", model)
 	}
