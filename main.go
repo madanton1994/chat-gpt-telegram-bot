@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/go-resty/resty/v2"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/pkoukk/tiktoken-go"
 )
 
 var (
@@ -132,7 +134,13 @@ func sendSettingsMenu(bot *tgbotapi.BotAPI, chatID int64) {
 	keyboard := tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("Model: gpt-3.5-turbo"),
+			tgbotapi.NewKeyboardButton("Model: gpt-3.5-turbo-16k"),
 			tgbotapi.NewKeyboardButton("Model: gpt-4"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Model: gpt-4o"),
+			tgbotapi.NewKeyboardButton("Model: gpt-4-1106-preview"),
+			tgbotapi.NewKeyboardButton("Model: gpt-4-vision-preview"),
 		),
 		tgbotapi.NewKeyboardButtonRow(tgbotapi.NewKeyboardButton("🔙 Back")),
 	)
@@ -143,11 +151,13 @@ func getChatGPTResponse(chatID int64, message string) string {
 	client := resty.New()
 	model := getCurrentModel(chatID)
 
+	messages := []map[string]string{
+		{"role": "user", "content": message},
+	}
+
 	requestBody := map[string]interface{}{
-		"model": model,
-		"messages": []map[string]string{
-			{"role": "user", "content": message},
-		},
+		"model":    model,
+		"messages": messages,
 	}
 
 	responseBody := struct {
@@ -166,6 +176,15 @@ func getChatGPTResponse(chatID int64, message string) string {
 
 	log.Println("Sending request to OpenAI API...")
 	log.Printf("Request body: %v", requestBody)
+
+	// Count tokens before sending the request
+	nInputTokens, nOutputTokens, err := countTokensFromMessages(messages, "", model)
+	if err != nil {
+		log.Printf("Error counting tokens: %v", err)
+		return "An error occurred while processing your request."
+	}
+	log.Printf("Input tokens: %d, Output tokens: %d", nInputTokens, nOutputTokens)
+
 	resp, err := client.R().
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Authorization", "Bearer "+openaiAPIKey).
@@ -191,7 +210,17 @@ func getChatGPTResponse(chatID int64, message string) string {
 	}
 
 	if len(responseBody.Choices) > 0 {
-		return formatAsTelegramCode(responseBody.Choices[0].Message.Content)
+		answer := responseBody.Choices[0].Message.Content
+
+		// Count tokens for the answer
+		_, nOutputTokens, err = countTokensFromMessages(nil, answer, model)
+		if err != nil {
+			log.Printf("Error counting output tokens: %v", err)
+			return "An error occurred while processing your request."
+		}
+		log.Printf("Output tokens: %d", nOutputTokens)
+
+		return formatAsTelegramCode(answer)
 	}
 
 	return "❌ I couldn't process your request."
@@ -237,4 +266,44 @@ func formatAsTelegramCode(content string) string {
 		code := re.FindStringSubmatch(m)[1]
 		return "<pre>" + code + "</pre>"
 	})
+}
+
+// Function to count tokens
+func countTokensFromMessages(messages []map[string]string, answer, model string) (int, int, error) {
+	encoding, err := tiktoken.EncodingForModel(model)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	var tokensPerMessage, tokensPerName int
+	switch model {
+	case "gpt-3.5-turbo-16k", "gpt-3.5-turbo":
+		tokensPerMessage = 4
+		tokensPerName = -1
+	case "gpt-4", "gpt-4-1106-preview", "gpt-4-vision-preview", "gpt-4o":
+		tokensPerMessage = 3
+		tokensPerName = 1
+	default:
+		return 0, 0, fmt.Errorf("unknown model: %s", model)
+	}
+
+	nInputTokens := 0
+	if messages != nil {
+		for _, message := range messages {
+			nInputTokens += tokensPerMessage
+			if content, ok := message["content"]; ok {
+				nInputTokens += len(encoding.Encode(content))
+			}
+			if name, ok := message["name"]; ok {
+				nInputTokens += tokensPerName
+				nInputTokens += len(encoding.Encode(name))
+			}
+		}
+	}
+
+	nInputTokens += 2
+
+	nOutputTokens := 1 + len(encoding.Encode(answer))
+
+	return nInputTokens, nOutputTokens, nil
 }
