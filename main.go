@@ -263,12 +263,6 @@ func sendChatList(bot *tgbotapi.BotAPI, chatID int64) {
 		chatButtons = append(chatButtons, tgbotapi.NewKeyboardButton(fmt.Sprintf("Chat ID: %d (%s)", id, name)))
 	}
 
-	if len(chatButtons) == 0 {
-		msg := tgbotapi.NewMessage(chatID, "📭 No chats found.")
-		bot.Send(msg)
-		return
-	}
-
 	keyboard := tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(chatButtons...),
 		tgbotapi.NewKeyboardButtonRow(
@@ -304,12 +298,6 @@ func sendDeleteChatMenu(bot *tgbotapi.BotAPI, chatID int64) {
 			continue
 		}
 		chatButtons = append(chatButtons, tgbotapi.NewKeyboardButton(fmt.Sprintf("Delete Chat ID: %d (%s)", id, name)))
-	}
-
-	if len(chatButtons) == 0 {
-		msg := tgbotapi.NewMessage(chatID, "📭 No chats found.")
-		bot.Send(msg)
-		return
 	}
 
 	keyboard := tgbotapi.NewReplyKeyboard(
