@@ -6,7 +6,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"sync"
 
 	"github.com/go-resty/resty/v2"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -14,9 +13,7 @@ import (
 
 var openaiAPIKey string
 var serverURL string
-
-var chatHistories = make(map[int64][]string)
-var chatHistoriesMutex sync.Mutex
+var modelMap = make(map[int64]string) // Stores the model for each chat ID
 
 func main() {
 	telegramToken := os.Getenv("TELEGRAM_BOT_TOKEN")
@@ -84,39 +81,30 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		text := update.Message.Text
 		log.Printf("Received message: %s", text)
 
-		if strings.HasPrefix(text, "/") {
-			handleCommand(bot, update.Message.Chat.ID, text)
-		} else if text == "🔙 Back" {
-			sendMainMenu(bot, update.Message.Chat.ID)
-		} else if strings.HasPrefix(text, "Model: ") {
-			model := strings.TrimPrefix(text, "Model: ")
-			saveChatHistory(update.Message.Chat.ID, "Model: "+model)
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "✅ Model switched to: "+model)
-			msg.ReplyMarkup = mainMenuKeyboard()
-			bot.Send(msg)
-		} else {
-			response := getChatGPTResponse(update.Message.Chat.ID, text)
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
-			msg.ParseMode = "HTML"
-			bot.Send(msg)
-			saveChatHistory(update.Message.Chat.ID, text)
+		switch text {
+		case "🚀 Start":
+			sendWelcomeMessage(bot, update.Message.Chat.ID)
+		case "ℹ️ Help":
+			sendHelpMessage(bot, update.Message.Chat.ID)
+		case "📊 Status":
+			sendStatusMessage(bot, update.Message.Chat.ID)
+		case "⚙️ Settings":
+			sendSettingsMenu(bot, update.Message.Chat.ID)
+		case "🔙 Back":
+			sendWelcomeMessage(bot, update.Message.Chat.ID)
+		default:
+			if strings.HasPrefix(text, "Model: ") {
+				model := strings.TrimPrefix(text, "Model: ")
+				modelMap[update.Message.Chat.ID] = model
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Model set to "+model)
+				bot.Send(msg)
+			} else {
+				response := getChatGPTResponse(update.Message.Chat.ID, text)
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
+				msg.ParseMode = "HTML"
+				bot.Send(msg)
+			}
 		}
-	}
-}
-
-func handleCommand(bot *tgbotapi.BotAPI, chatID int64, text string) {
-	switch text {
-	case "/start":
-		sendWelcomeMessage(bot, chatID)
-	case "/help":
-		sendHelpMessage(bot, chatID)
-	case "/status":
-		sendStatusMessage(bot, chatID)
-	case "/settings":
-		sendSettingsMenu(bot, chatID)
-	default:
-		msg := tgbotapi.NewMessage(chatID, "Unknown command. Use /help to see available commands.")
-		bot.Send(msg)
 	}
 }
 
@@ -212,30 +200,12 @@ func getChatGPTResponse(chatID int64, message string) string {
 	return "❌ I couldn't process your request."
 }
 
-func saveChatHistory(chatID int64, message string) {
-	chatHistoriesMutex.Lock()
-	defer chatHistoriesMutex.Unlock()
-	chatHistories[chatID] = append(chatHistories[chatID], message)
-}
-
 func getCurrentModel(chatID int64) string {
-	chatHistoriesMutex.Lock()
-	defer chatHistoriesMutex.Unlock()
-
-	history := chatHistories[chatID]
-	for _, msg := range history {
-		if strings.HasPrefix(msg, "Model: ") {
-			return strings.TrimPrefix(msg, "Model: ")
-		}
+	model, exists := modelMap[chatID]
+	if !exists {
+		return "gpt-3.5-turbo" // Default model
 	}
-
-	return "gpt-3.5-turbo" // Default model
-}
-
-func sendMainMenu(bot *tgbotapi.BotAPI, chatID int64) {
-	msg := tgbotapi.NewMessage(chatID, "Main menu")
-	msg.ReplyMarkup = mainMenuKeyboard()
-	bot.Send(msg)
+	return model
 }
 
 func mainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
