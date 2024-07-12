@@ -89,7 +89,12 @@ func loadModelConfig(filename string) error {
 		return err
 	}
 
-	models = config.AvailableTextModels
+	// Filter out deprecated models
+	for _, model := range config.AvailableTextModels {
+		if model != "text-davinci-003" {
+			models = append(models, model)
+		}
+	}
 	modelInfo = config.Info
 
 	return nil
@@ -154,8 +159,21 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 }
 
 func setModel(bot *tgbotapi.BotAPI, chatID int64, model string) {
+	if !isValidModel(model) {
+		sendMessage(bot, chatID, "❌ Invalid model selected.")
+		return
+	}
 	modelMap[chatID] = model
 	sendMessage(bot, chatID, "Model set to "+model)
+}
+
+func isValidModel(model string) bool {
+	for _, m := range models {
+		if m == model {
+			return true
+		}
+	}
+	return false
 }
 
 func sendWelcomeMessage(bot *tgbotapi.BotAPI, chatID int64) {
