@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -24,7 +25,7 @@ var activeChats map[int64]int64 // stores the active chat ID for each user
 
 func main() {
 	telegramToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-	openaiAPIKey = os.Getenv("OPENAI_API_KEY")
+	openaiAPIKey = os.getenv("OPENAI_API_KEY")
 	serverURL = os.Getenv("SERVER_URL")
 	webhookURL := os.Getenv("WEBHOOK_URL")
 	useWebhook := os.Getenv("USE_WEBHOOK")
@@ -140,6 +141,10 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 			sendSettingsMenu(bot, update.Message.Chat.ID)
 		case "💬 Chats":
 			sendChatList(bot, update.Message.Chat.ID)
+		case "🆕 Create Chat":
+			createNewChat(bot, update.Message.Chat.ID)
+		case "❌ Delete Chat":
+			sendDeleteChatMenu(bot, update.Message.Chat.ID)
 		case "🔙 Back":
 			sendWelcomeMessage(bot, update.Message.Chat.ID)
 		default:
@@ -160,6 +165,19 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 				} else {
 					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Model set to "+model)
 					bot.Send(msg)
+				}
+			} else if strings.HasPrefix(text, "Delete Chat ID: ") {
+				chatIDStr := strings.TrimPrefix(text, "Delete Chat ID: ")
+				chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
+				if err == nil {
+					err := deleteChat(chatID)
+					if err != nil {
+						msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Failed to delete chat: "+err.Error())
+						bot.Send(msg)
+					} else {
+						msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Chat "+chatIDStr+" deleted successfully.")
+						bot.Send(msg)
+					}
 				}
 			} else {
 				response := getChatGPTResponse(update.Message.Chat.ID, text)
@@ -255,12 +273,71 @@ func sendChatList(bot *tgbotapi.BotAPI, chatID int64) {
 
 	keyboard := tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(chatButtons...),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("🆕 Create Chat"),
+			tgbotapi.NewKeyboardButton("❌ Delete Chat"),
+		),
 		tgbotapi.NewKeyboardButtonRow(tgbotapi.NewKeyboardButton("🔙 Back")),
 	)
 
 	msg := tgbotapi.NewMessage(chatID, "💬 Active chats:")
 	msg.ReplyMarkup = keyboard
 	bot.Send(msg)
+}
+
+func sendDeleteChatMenu(bot *tgbotapi.BotAPI, chatID int64) {
+	log.Println("Fetching chat list for deletion...")
+
+	rows, err := db.Query("SELECT DISTINCT chat_id FROM chat_history")
+	if err != nil {
+		log.Printf("Error fetching chat list: %v", err)
+		msg := tgbotapi.NewMessage(chatID, "❌ Error fetching chat list.")
+		bot.Send(msg)
+		return
+	}
+	defer rows.Close()
+
+	var chatIDs []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			log.Printf("Error scanning chat ID: %v", err)
+			continue
+		}
+		chatIDs = append(chatIDs, id)
+	}
+
+	if len(chatIDs) == 0 {
+		msg := tgbotapi.NewMessage(chatID, "📭 No chats found.")
+		bot.Send(msg)
+		return
+	}
+
+	var chatButtons []tgbotapi.KeyboardButton
+	for _, id := range chatIDs {
+		chatButtons = append(chatButtons, tgbotapi.NewKeyboardButton("Delete Chat ID: "+strconv.FormatInt(id, 10)))
+	}
+
+	keyboard := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(chatButtons...),
+		tgbotapi.NewKeyboardButtonRow(tgbotapi.NewKeyboardButton("🔙 Back")),
+	)
+
+	msg := tgbotapi.NewMessage(chatID, "❌ Select a chat to delete:")
+	msg.ReplyMarkup = keyboard
+	bot.Send(msg)
+}
+
+func createNewChat(bot *tgbotapi.BotAPI, chatID int64) {
+	// Assuming chat creation logic is handled elsewhere and we get a new chat ID
+	newChatID := chatID + 1 // Example new chat ID
+	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("New chat created with ID: %d", newChatID))
+	bot.Send(msg)
+}
+
+func deleteChat(chatID int64) error {
+	_, err := db.Exec("DELETE FROM chat_history WHERE chat_id = $1", chatID)
+	return err
 }
 
 func getChatGPTResponse(chatID int64, message string) string {
@@ -275,7 +352,7 @@ func getChatGPTResponse(chatID int64, message string) string {
 	err := db.QueryRow("SELECT model FROM chat_models WHERE chat_id = $1", activeChatID).Scan(&model)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			model = "gpt-3.5-turbo" // Установите модель по умолчанию
+			model = "gpt-3.5-turbo" // Default model
 		} else {
 			log.Printf("Error querying model: %v", err)
 			return "An error occurred while processing your request."
