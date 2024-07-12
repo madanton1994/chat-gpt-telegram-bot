@@ -151,6 +151,16 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Switched to chat "+chatIDStr)
 					bot.Send(msg)
 				}
+			} else if strings.HasPrefix(text, "Model: ") {
+				model := strings.TrimPrefix(text, "Model: ")
+				err := setChatModel(update.Message.Chat.ID, model)
+				if err != nil {
+					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Failed to set model: "+err.Error())
+					bot.Send(msg)
+				} else {
+					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Model set to "+model)
+					bot.Send(msg)
+				}
 			} else {
 				response := getChatGPTResponse(update.Message.Chat.ID, text)
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
@@ -240,8 +250,13 @@ func sendChatList(bot *tgbotapi.BotAPI, chatID int64) {
 func getChatGPTResponse(chatID int64, message string) string {
 	client := resty.New()
 
+	activeChatID, ok := activeChats[chatID]
+	if !ok {
+		activeChatID = chatID
+	}
+
 	var model string
-	err := db.QueryRow("SELECT model FROM chat_models WHERE chat_id = $1", chatID).Scan(&model)
+	err := db.QueryRow("SELECT model FROM chat_models WHERE chat_id = $1", activeChatID).Scan(&model)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			model = "gpt-3.5-turbo" // Установите модель по умолчанию
@@ -303,6 +318,11 @@ func getChatGPTResponse(chatID int64, message string) string {
 	}
 
 	return "❌ I couldn't process your request."
+}
+
+func setChatModel(chatID int64, model string) error {
+	_, err := db.Exec("INSERT INTO chat_models (chat_id, model) VALUES ($1, $2) ON CONFLICT (chat_id) DO UPDATE SET model = $2", chatID, model)
+	return err
 }
 
 func saveChatHistory(chatID int64, message string) {
