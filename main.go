@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -11,22 +12,47 @@ import (
 	"github.com/go-resty/resty/v2"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/pkoukk/tiktoken-go"
+	"gopkg.in/yaml.v2"
 )
 
 var (
 	openaiAPIKey string
 	serverURL    string
+	webhookURL   string
+	useWebhook   string
 	modelMap     = make(map[int64]string) // Stores the model for each chat ID
+	models       []string                 // List of available models from the YAML file
+	modelInfo    map[string]ModelInfo     // Detailed model info from the YAML file
 )
+
+type ModelConfig struct {
+	AvailableTextModels []string             `yaml:"available_text_models"`
+	Info                map[string]ModelInfo `yaml:"info"`
+}
+
+type ModelInfo struct {
+	Type                     string         `yaml:"type"`
+	Name                     string         `yaml:"name"`
+	Description              string         `yaml:"description"`
+	PricePer1000InputTokens  float64        `yaml:"price_per_1000_input_tokens"`
+	PricePer1000OutputTokens float64        `yaml:"price_per_1000_output_tokens"`
+	Scores                   map[string]int `yaml:"scores"`
+}
 
 func main() {
 	telegramToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	openaiAPIKey = os.Getenv("OPENAI_API_KEY")
 	serverURL = os.Getenv("SERVER_URL")
-	webhookURL := os.Getenv("WEBHOOK_URL")
-	useWebhook := os.Getenv("USE_WEBHOOK")
+	webhookURL = os.Getenv("WEBHOOK_URL")
+	useWebhook = os.Getenv("USE_WEBHOOK")
 
 	validateEnvVars(telegramToken, openaiAPIKey, serverURL)
+
+	// Load models configuration
+	err := loadModelConfig("/app/config/models.yml")
+	if err != nil {
+		log.Fatalf("Failed to load model configuration: %v", err)
+	}
 
 	bot, err := tgbotapi.NewBotAPI(telegramToken)
 	if err != nil {
@@ -49,6 +75,24 @@ func validateEnvVars(vars ...string) {
 			log.Fatalf("%s is not set", v)
 		}
 	}
+}
+
+func loadModelConfig(filename string) error {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+
+	var config ModelConfig
+	err = yaml.Unmarshal(data, &config)
+	if err != nil {
+		return err
+	}
+
+	models = config.AvailableTextModels
+	modelInfo = config.Info
+
+	return nil
 }
 
 func setupWebhook(bot *tgbotapi.BotAPI, webhookURL string) {
@@ -131,19 +175,16 @@ func sendStatusMessage(bot *tgbotapi.BotAPI, chatID int64) {
 }
 
 func sendSettingsMenu(bot *tgbotapi.BotAPI, chatID int64) {
-	keyboard := tgbotapi.NewReplyKeyboard(
-		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("Model: gpt-3.5-turbo"),
-			tgbotapi.NewKeyboardButton("Model: gpt-3.5-turbo-16k"),
-			tgbotapi.NewKeyboardButton("Model: gpt-4"),
-		),
-		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("Model: gpt-4o"),
-			tgbotapi.NewKeyboardButton("Model: gpt-4-1106-preview"),
-			tgbotapi.NewKeyboardButton("Model: gpt-4-vision-preview"),
-		),
-		tgbotapi.NewKeyboardButtonRow(tgbotapi.NewKeyboardButton("🔙 Back")),
-	)
+	var keyboardRows [][]tgbotapi.KeyboardButton
+
+	for _, model := range models {
+		keyboardRows = append(keyboardRows, tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton(fmt.Sprintf("Model: %s", model)),
+		))
+	}
+	keyboardRows = append(keyboardRows, tgbotapi.NewKeyboardButtonRow(tgbotapi.NewKeyboardButton("🔙 Back")))
+
+	keyboard := tgbotapi.NewReplyKeyboard(keyboardRows...)
 	sendMessageWithKeyboard(bot, chatID, "⚙️ Select a model:", keyboard)
 }
 
@@ -292,18 +333,21 @@ func countTokensFromMessages(messages []map[string]string, answer, model string)
 		for _, message := range messages {
 			nInputTokens += tokensPerMessage
 			if content, ok := message["content"]; ok {
-				nInputTokens += len(encoding.Encode(content))
+				tokens := encoding.Encode(content, []string{}, []string{})
+				nInputTokens += len(tokens)
 			}
 			if name, ok := message["name"]; ok {
+				tokens := encoding.Encode(name, []string{}, []string{})
 				nInputTokens += tokensPerName
-				nInputTokens += len(encoding.Encode(name))
+				nInputTokens += len(tokens)
 			}
 		}
 	}
 
 	nInputTokens += 2
 
-	nOutputTokens := 1 + len(encoding.Encode(answer))
+	tokens := encoding.Encode(answer, []string{}, []string{})
+	nOutputTokens := 1 + len(tokens)
 
 	return nInputTokens, nOutputTokens, nil
 }

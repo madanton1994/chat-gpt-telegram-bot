@@ -16,4 +16,5 @@ require (
 require (
 	github.com/pkoukk/tiktoken-go v0.1.7
 	golang.org/x/net v0.27.0 // indirect
+	gopkg.in/yaml.v2 v2.4.0
 )

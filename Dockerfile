@@ -26,6 +26,9 @@ WORKDIR /app
 # Copy the built binary from the build stage
 COPY --from=build /app/telegram-chatgpt-bot /app/telegram-chatgpt-bot
 
+# Copy the models.yml file
+COPY --from=build /app/config/models.yml /app/config/models.yml
+
 # Ensure the binary is executable
 RUN chmod +x /app/telegram-chatgpt-bot
 
