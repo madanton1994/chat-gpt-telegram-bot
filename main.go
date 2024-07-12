@@ -25,7 +25,7 @@ var activeChats map[int64]int64 // stores the active chat ID for each user
 
 func main() {
 	telegramToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-	openaiAPIKey = os.getenv("OPENAI_API_KEY")
+	openaiAPIKey = os.Getenv("OPENAI_API_KEY")
 	serverURL = os.Getenv("SERVER_URL")
 	webhookURL := os.Getenv("WEBHOOK_URL")
 	useWebhook := os.Getenv("USE_WEBHOOK")
