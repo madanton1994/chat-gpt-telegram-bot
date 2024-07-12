@@ -21,8 +21,10 @@ var (
 	webhookURL   string
 	useWebhook   string
 	modelMap     = make(map[int64]string) // Stores the model for each chat ID
+	modeMap      = make(map[int64]string) // Stores the mode for each chat ID
 	models       []string                 // List of available models from the YAML file
 	modelInfo    map[string]ModelInfo     // Detailed model info from the YAML file
+	chatModes    map[string]ChatMode      // Detailed chat modes from the YAML file
 )
 
 type ModelConfig struct {
@@ -39,6 +41,13 @@ type ModelInfo struct {
 	Scores                   map[string]int `yaml:"scores"`
 }
 
+type ChatMode struct {
+	Name           string `yaml:"name"`
+	WelcomeMessage string `yaml:"welcome_message"`
+	PromptStart    string `yaml:"prompt_start"`
+	ParseMode      string `yaml:"parse_mode"`
+}
+
 func main() {
 	telegramToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	openaiAPIKey = os.Getenv("OPENAI_API_KEY")
@@ -48,10 +57,14 @@ func main() {
 
 	validateEnvVars(telegramToken, openaiAPIKey, serverURL)
 
-	// Load models configuration
+	// Load models and chat modes configuration
 	err := loadModelConfig("/app/config/models.yml")
 	if err != nil {
 		log.Fatalf("Failed to load model configuration: %v", err)
+	}
+	err = loadChatModesConfig("/app/config/chat_modes.yml")
+	if err != nil {
+		log.Fatalf("Failed to load chat modes configuration: %v", err)
 	}
 
 	bot, err := tgbotapi.NewBotAPI(telegramToken)
@@ -100,6 +113,20 @@ func loadModelConfig(filename string) error {
 	return nil
 }
 
+func loadChatModesConfig(filename string) error {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+
+	err = yaml.Unmarshal(data, &chatModes)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func setupWebhook(bot *tgbotapi.BotAPI, webhookURL string) {
 	webhookConfig, err := tgbotapi.NewWebhook(webhookURL)
 	if err != nil {
@@ -128,6 +155,8 @@ func processUpdates(bot *tgbotapi.BotAPI, updates tgbotapi.UpdatesChannel) {
 	for update := range updates {
 		if update.Message != nil {
 			handleUpdate(bot, update)
+		} else if update.CallbackQuery != nil {
+			handleCallbackQuery(bot, update.CallbackQuery)
 		}
 	}
 }
@@ -150,11 +179,23 @@ func handleUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		sendSettingsMenu(bot, update.Message.Chat.ID)
 	case text == "🔙 Back":
 		sendWelcomeMessage(bot, update.Message.Chat.ID)
+	case text == "/mode":
+		showChatModesHandle(bot, update.Message.Chat.ID)
 	case strings.HasPrefix(text, "Model: "):
 		setModel(bot, update.Message.Chat.ID, strings.TrimPrefix(text, "Model: "))
 	default:
 		response := getChatGPTResponse(update.Message.Chat.ID, text)
 		sendMessage(bot, update.Message.Chat.ID, response)
+	}
+}
+
+func handleCallbackQuery(bot *tgbotapi.BotAPI, callbackQuery *tgbotapi.CallbackQuery) {
+	data := callbackQuery.Data
+	chatID := callbackQuery.Message.Chat.ID
+	switch {
+	case strings.HasPrefix(data, "set_chat_mode|"):
+		chatMode := strings.TrimPrefix(data, "set_chat_mode|")
+		setChatMode(bot, chatID, chatMode)
 	}
 }
 
@@ -182,7 +223,7 @@ func sendWelcomeMessage(bot *tgbotapi.BotAPI, chatID int64) {
 }
 
 func sendHelpMessage(bot *tgbotapi.BotAPI, chatID int64) {
-	msg := "ℹ️ Here is a list of commands you can use:\n/start - Start the bot\n/help - Show this help message\n/status - Show bot status\n/settings - Show settings"
+	msg := "ℹ️ Here is a list of commands you can use:\n/start - Start the bot\n/help - Show this help message\n/status - Show bot status\n/settings - Show settings\n/mode - Select chat mode"
 	sendMessageWithKeyboard(bot, chatID, msg, mainMenuKeyboard())
 }
 
@@ -206,11 +247,37 @@ func sendSettingsMenu(bot *tgbotapi.BotAPI, chatID int64) {
 	sendMessageWithKeyboard(bot, chatID, "⚙️ Select a model:", keyboard)
 }
 
+func showChatModesHandle(bot *tgbotapi.BotAPI, chatID int64) {
+	var keyboardRows [][]tgbotapi.KeyboardButton
+
+	for _, info := range chatModes {
+		keyboardRows = append(keyboardRows, tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton(fmt.Sprintf("%s", info.Name)),
+		))
+	}
+	keyboardRows = append(keyboardRows, tgbotapi.NewKeyboardButtonRow(tgbotapi.NewKeyboardButton("🔙 Back")))
+
+	keyboard := tgbotapi.NewReplyKeyboard(keyboardRows...)
+	sendMessageWithKeyboard(bot, chatID, "⚙️ Select a chat mode:", keyboard)
+}
+
+func setChatMode(bot *tgbotapi.BotAPI, chatID int64, mode string) {
+	chatMode, exists := chatModes[mode]
+	if !exists {
+		sendMessage(bot, chatID, "❌ Invalid chat mode selected.")
+		return
+	}
+	modeMap[chatID] = mode
+	sendMessage(bot, chatID, chatMode.WelcomeMessage)
+}
+
 func getChatGPTResponse(chatID int64, message string) string {
 	client := resty.New()
 	model := getCurrentModel(chatID)
+	mode := getCurrentChatMode(chatID)
 
 	messages := []map[string]string{
+		{"role": "system", "content": mode.PromptStart},
 		{"role": "user", "content": message},
 	}
 
@@ -293,6 +360,14 @@ func getCurrentModel(chatID int64) string {
 	return model
 }
 
+func getCurrentChatMode(chatID int64) ChatMode {
+	mode, exists := modeMap[chatID]
+	if !exists {
+		return chatModes["assistant"] // Default chat mode
+	}
+	return chatModes[mode]
+}
+
 func sendMessage(bot *tgbotapi.BotAPI, chatID int64, text string) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ParseMode = "HTML"
@@ -315,6 +390,9 @@ func mainMenuKeyboard() tgbotapi.ReplyKeyboardMarkup {
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("📊 Status"),
 			tgbotapi.NewKeyboardButton("⚙️ Settings"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("/mode"),
 		),
 	)
 }
