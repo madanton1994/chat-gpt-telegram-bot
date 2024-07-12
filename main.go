@@ -186,7 +186,23 @@ func sendHelpMessage(bot *tgbotapi.BotAPI, chatID int64) {
 }
 
 func sendStatusMessage(bot *tgbotapi.BotAPI, chatID int64) {
-	msg := tgbotapi.NewMessage(chatID, "📊 All systems are operational.")
+	activeChatID, ok := activeChats[chatID]
+	if !ok {
+		activeChatID = chatID
+	}
+
+	var model string
+	err := db.QueryRow("SELECT model FROM chat_models WHERE chat_id = $1", activeChatID).Scan(&model)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			model = "gpt-3.5-turbo"
+		} else {
+			log.Printf("Error querying model: %v", err)
+			model = "Unknown"
+		}
+	}
+
+	msg := tgbotapi.NewMessage(chatID, "📊 All systems are operational.\nCurrent model: "+model)
 	bot.Send(msg)
 }
 
